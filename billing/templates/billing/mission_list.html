@@ -5,8 +5,19 @@
 
 {% block content %}
 <div class="table-wrapper">
-    <h2>Missions</h2>
-    <a href="{% url 'mission_create' %}" class="btn-add-new">Add New Mission</a>
+    <div class="header-actions">
+        <h2>Missions</h2>
+        <div class="actions">
+            <form method="get" class="search-form">
+                <input type="text" name="search" value="{{ search_query }}" placeholder="Search missions..." class="search-input">
+                <button type="submit" class="btn-search">Search</button>
+                {% if search_query %}
+                    <a href="{% url 'mission_list' %}" class="btn-clear">Clear</a>
+                {% endif %}
+            </form>
+            <a href="{% url 'mission_create' %}" class="btn-add-new">Add New Mission</a>
+        </div>
+    </div>
     <table>
         <thead>
             <tr>
@@ -40,4 +51,57 @@
         </tbody>
     </table>
 </div>
+
+<style>
+    .header-actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+
+    .actions {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+    }
+
+    .search-form {
+        display: flex;
+        gap: 5px;
+    }
+
+    .search-input {
+        padding: 8px;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        font-size: 14px;
+        min-width: 200px;
+    }
+
+    .btn-search {
+        background-color: var(--primary-color);
+        color: white;
+        border: none;
+        padding: 8px 15px;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+    .btn-search:hover {
+        background-color: var(--primary-color-dark);
+    }
+
+    .btn-clear {
+        background-color: var(--secondary-color);
+        color: white;
+        text-decoration: none;
+        padding: 8px 15px;
+        border-radius: 4px;
+    }
+
+    .btn-clear:hover {
+        background-color: var(--secondary-color-dark);
+    }
+</style>
 {% endblock %} 

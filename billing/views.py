@@ -13,6 +13,7 @@ from datetime import datetime
 from django.contrib import messages
 import os
 import traceback
+from django.db import models
 
 # Create your views here.
 
@@ -22,19 +23,41 @@ def home(request):
 
 @login_required
 def resource_list_view(request):
+    search_query = request.GET.get('search', '')
     resources = Resource.objects.all()
+    
+    if search_query:
+        resources = resources.filter(
+            models.Q(full_name__icontains=search_query) |
+            models.Q(matricule__icontains=search_query) |
+            models.Q(grade__icontains=search_query) |
+            models.Q(grade_des__icontains=search_query)
+        )
+    
     context = {
         'resources': resources,
-        'page_title': 'Resources'
+        'page_title': 'Resources',
+        'search_query': search_query
     }
     return render(request, 'billing/resource_list.html', context)
 
 @login_required
 def mission_list_view(request):
+    search_query = request.GET.get('search', '')
     missions = Mission.objects.all()
+    
+    if search_query:
+        missions = missions.filter(
+            models.Q(otp_l2__icontains=search_query) |
+            models.Q(belgian_name__icontains=search_query) |
+            models.Q(libelle_de_projet__icontains=search_query) |
+            models.Q(code_type__icontains=search_query)
+        )
+    
     context = {
         'missions': missions,
-        'page_title': 'Missions'
+        'page_title': 'Missions',
+        'search_query': search_query
     }
     return render(request, 'billing/mission_list.html', context)
 
