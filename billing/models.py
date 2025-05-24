@@ -44,9 +44,9 @@ class Resource(models.Model):
         (GRADE_DES_NA, 'N/A'),
     ]
 
-    full_name = models.CharField(max_length=255, verbose_name="Full Name")
+    full_name = models.CharField(max_length=255, verbose_name="Full Name") # Name belgium
     picture = models.ImageField(upload_to='resources/', null=True, blank=True, verbose_name="Profile Picture")
-    matricule = models.CharField(max_length=50, unique=True, verbose_name="Matricule")
+    matricule = models.CharField(max_length=50, unique=True, verbose_name="Matricule") 
     grade = models.CharField(
         max_length=10,
         choices=GRADE_CHOICES,
@@ -63,7 +63,7 @@ class Resource(models.Model):
         blank=False,
         null=False
     )
-    rate_ibm = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Rate IBM")
+    rate_ibm = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Rate IBM") # Rate
     rate_des = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Rate DES")
 
     def __str__(self):
@@ -85,11 +85,11 @@ class Mission(models.Model):
     CODE_TYPE_CHOICES = [
         (CODE_FRANCE, 'Code France'),
         (CODE_DES, 'Code DES'),
-    ]
+    ] # comment
 
-    otp_l2 = models.CharField(max_length=100, unique=True, verbose_name="OTP L2 (Swift Code)")
-    belgian_name = models.CharField(max_length=255, verbose_name="Belgian Name")
-    libelle_de_projet = models.CharField(max_length=255, verbose_name="Libellé de Projet", blank=True, null=True)
+    otp_l2 = models.CharField(max_length=100, unique=True, verbose_name="OTP L2 (Swift Code)") #code swift
+    belgian_name = models.CharField(max_length=255, verbose_name="Libellé de Projet") # Swapped verbose_name
+    libelle_de_projet = models.CharField(max_length=255, verbose_name="Belgian Name", blank=True, null=True) # Swapped verbose_name
     code_type = models.CharField(
         max_length=3,
         choices=CODE_TYPE_CHOICES,
@@ -100,7 +100,11 @@ class Mission(models.Model):
     )
 
     def __str__(self):
-        return f"{self.otp_l2} - {self.libelle_de_projet or self.belgian_name} ({self.get_code_type_display()})"
+        # The field 'belgian_name' now holds the primary project label data.
+        # The field 'libelle_de_projet' now holds the secondary/belgian name data.
+        primary_label = self.belgian_name # This field now holds "Libellé de Projet" data
+        secondary_label = self.libelle_de_projet # This field now holds "Belgian Name" data
+        return f"{self.otp_l2} - {primary_label or secondary_label} ({self.get_code_type_display()})"
 
     def get_absolute_url(self):
         return reverse('mission_detail', kwargs={'pk': self.pk})

@@ -7,9 +7,9 @@ class ResourceAdmin(admin.ModelAdmin):
     search_fields = ('full_name', 'matricule')
 
 class MissionAdmin(admin.ModelAdmin):
-    list_display = ('otp_l2', 'libelle_de_projet', 'belgian_name', 'code_type')
+    list_display = ('otp_l2', 'belgian_name', 'libelle_de_projet', 'code_type')
     list_filter = ('code_type',)
-    search_fields = ('otp_l2', 'libelle_de_projet', 'belgian_name')
+    search_fields = ('otp_l2', 'belgian_name', 'libelle_de_projet')
 
 # Register your models here.
 admin.site.register(Resource, ResourceAdmin)
