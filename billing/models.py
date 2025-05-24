@@ -30,6 +30,7 @@ class Resource(models.Model):
     GRADE_DES_C2 = 'DES_C2'
     GRADE_DES_CJ = 'DES_CJ'
     GRADE_DES_STG = 'DES_STG'
+    GRADE_DES_NA = 'DES_NA'
     GRADE_DES_CHOICES = [
         (GRADE_DES_M3, 'Manager 3'),
         (GRADE_DES_M2, 'Manager 2'),
@@ -40,6 +41,7 @@ class Resource(models.Model):
         (GRADE_DES_C2, 'Consultant 2'),
         (GRADE_DES_CJ, 'Consultant Junior'),
         (GRADE_DES_STG, 'Stagiaire'),
+        (GRADE_DES_NA, 'N/A'),
     ]
 
     full_name = models.CharField(max_length=255, verbose_name="Full Name")
