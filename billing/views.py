@@ -43,7 +43,7 @@ def resource_create(request):
         form = ResourceForm(request.POST, request.FILES)
         if form.is_valid():
             form.save()
-            messages.success(request, 'Resource created successfully!')
+            messages.success(request, 'Resource added successfully!')
             return redirect('resource_list')
     else:
         form = ResourceForm()
@@ -77,7 +77,7 @@ def mission_create(request):
         form = MissionForm(request.POST)
         if form.is_valid():
             form.save()
-            messages.success(request, 'Mission created successfully!')
+            messages.success(request, 'Mission added successfully!')
             return redirect('mission_list')
     else:
         form = MissionForm()
@@ -195,6 +195,7 @@ def facturation_slr(request):
             with open(output_path, 'rb') as f:
                 response = HttpResponse(f.read(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
                 response['Content-Disposition'] = f'attachment; filename="{output_filename}"'
+                messages.info(request, 'SLR report generated!')
                 return response
     else:
         form = SLRFileUploadForm()

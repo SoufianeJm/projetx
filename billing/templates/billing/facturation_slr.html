@@ -5,87 +5,166 @@
 {% block page_title %}Facturation SLR{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-    <div class="row">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title">Upload Files</h5>
-                    <p class="card-text">Upload the required Excel files to generate the SLR facturation report.</p>
-
-                    <form method="post" enctype="multipart/form-data">
-                        {% csrf_token %}
-                        {{ form|crispy }}
-                        <div class="mt-3">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-file-excel me-2"></i>Generate and Download Report
-                            </button>
-                        </div>
-                    </form>
-
-                    {% if messages %}
-                    <div class="mt-4">
-                        {% for message in messages %}
-                        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                            {{ message }}
-                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                        </div>
-                        {% endfor %}
-                    </div>
-                    {% endif %}
+<div class="facturation-wrapper">
+    <div class="facturation-card">
+        <form method="post" enctype="multipart/form-data" class="facturation-form" id="slr-upload-form">
+            {% csrf_token %}
+            <div class="custom-file-group">
+                <label for="id_mafe_report_file" class="custom-label">DTT IMT France MAFE Report (xlsx)</label>
+                <div class="custom-file-input-wrapper">
+                    <input type="file" name="mafe_report_file" id="id_mafe_report_file" accept=".xlsx" class="custom-file-input" onchange="handleFileChange(this, 'mafe')">
+                    <div class="file-preview" id="mafe-preview" style="display:none;"></div>
                 </div>
             </div>
-        </div>
+            <div class="custom-file-group">
+                <label for="id_heures_ibm_file" class="custom-label">Heures IBM (xlsx)</label>
+                <div class="custom-file-input-wrapper">
+                    <input type="file" name="heures_ibm_file" id="id_heures_ibm_file" accept=".xlsx" class="custom-file-input" onchange="handleFileChange(this, 'heures')">
+                    <div class="file-preview" id="heures-preview" style="display:none;"></div>
+                </div>
+            </div>
+            <div class="accepted-types">Accepted files: <b>XLSX</b></div>
+            <button type="submit" class="btn-facturation">Generate and Download Report</button>
+        </form>
     </div>
 </div>
 
 <style>
-    .card {
-        background: white;
-        border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        margin-bottom: 20px;
+    .facturation-wrapper {
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        min-height: 60vh;
+        padding: 32px 0;
     }
-
-    .card-body {
-        padding: 20px;
+    .facturation-card {
+        background: #fff;
+        border-radius: 14px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        padding: 36px 32px 32px 32px;
+        max-width: 420px;
+        width: 100%;
+        margin: 0 auto;
     }
-
-    .card-title {
+    .facturation-form {
+        display: flex;
+        flex-direction: column;
+        gap: 22px;
+    }
+    .custom-file-group {
+        margin-bottom: 0;
+    }
+    .custom-label {
+        font-weight: 600;
         color: var(--secondary-color);
-        margin-bottom: 15px;
+        margin-bottom: 6px;
+        display: block;
     }
-
-    .card-text {
-        color: var(--text-color);
-        margin-bottom: 20px;
+    .custom-file-input-wrapper {
+        position: relative;
     }
-
-    .btn-primary {
-        background-color: var(--primary-color);
+    .custom-file-input {
+        display: none;
+    }
+    .custom-file-input + .file-preview {
+        margin-top: 8px;
+    }
+    .custom-file-input-wrapper::before {
+        content: 'Select file...';
+        display: inline-block;
+        background: #f5f5f5;
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        padding: 10px 16px;
+        color: #666;
+        font-size: 1em;
+        cursor: pointer;
+        transition: border 0.2s;
+    }
+    .custom-file-input:focus + .file-preview,
+    .custom-file-input-wrapper:focus-within::before {
         border-color: var(--primary-color);
     }
-
-    .btn-primary:hover {
-        background-color: #6d9a1d;
-        border-color: #6d9a1d;
+    .file-preview {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: #f5f5f5;
+        border-radius: 6px;
+        padding: 8px 12px;
+        margin-top: 6px;
+        font-size: 0.97em;
+        color: #333;
+        border: 1px solid #e0e0e0;
     }
-
-    .alert {
-        border-radius: 4px;
-        margin-bottom: 10px;
+    .file-preview .file-icon {
+        color: var(--primary-color);
+        font-size: 1.2em;
     }
-
-    .alert-success {
-        background-color: #d4edda;
-        border-color: #c3e6cb;
-        color: #155724;
+    .file-preview .file-remove {
+        background: none;
+        border: none;
+        color: #e74c3c;
+        font-size: 1.1em;
+        cursor: pointer;
+        margin-left: 8px;
+        transition: color 0.2s;
     }
-
-    .alert-error {
-        background-color: #f8d7da;
-        border-color: #f5c6cb;
-        color: #721c24;
+    .file-preview .file-remove:hover {
+        color: #c0392b;
+    }
+    .accepted-types {
+        color: #888;
+        font-size: 0.95em;
+        margin-bottom: 8px;
+        margin-top: -10px;
+    }
+    .btn-facturation {
+        background: var(--primary-color);
+        color: #fff;
+        border: none;
+        border-radius: 7px;
+        padding: 12px 0;
+        font-size: 1.1em;
+        font-weight: 600;
+        cursor: pointer;
+        margin-top: 8px;
+        transition: background 0.2s;
+        box-shadow: 0 2px 8px rgba(134,188,36,0.10);
+    }
+    .btn-facturation:hover {
+        background: #6d9a1d;
     }
 </style>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+<script>
+function handleFileChange(input, type) {
+    const preview = document.getElementById(type + '-preview');
+    if (input.files && input.files[0]) {
+        const file = input.files[0];
+        const size = (file.size / 1024).toFixed(2) + ' KB';
+        preview.innerHTML = `<span class='file-icon'><i class='fas fa-file-excel'></i></span> ${file.name} <span style='color:#888;font-size:0.95em;'>${size}</span> <button type='button' class='file-remove' onclick='removeFile("${input.id}", "${type}-preview")'><i class='fas fa-times'></i></button>`;
+        preview.style.display = 'flex';
+    } else {
+        preview.innerHTML = '';
+        preview.style.display = 'none';
+    }
+}
+function removeFile(inputId, previewId) {
+    const input = document.getElementById(inputId);
+    input.value = '';
+    const preview = document.getElementById(previewId);
+    preview.innerHTML = '';
+    preview.style.display = 'none';
+}
+// Custom file input click
+Array.from(document.getElementsByClassName('custom-file-input-wrapper')).forEach(function(wrapper) {
+    wrapper.addEventListener('click', function(e) {
+        if (e.target.className.indexOf('file-remove') === -1) {
+            const input = wrapper.querySelector('input[type="file"]');
+            input.click();
+        }
+    });
+});
+</script>
 {% endblock %} 
