@@ -1,0 +1,18 @@
+{% extends "billing/base.html" %}
+
+{% block title %}Delete Resource - Dashboard{% endblock %}
+{% block page_title %}Delete Resource{% endblock %}
+
+{% block content %}
+<div class="table-wrapper">
+    <h2>Delete Resource</h2>
+    <p>Are you sure you want to delete the resource "{{ resource.full_name }}"?</p>
+    <form method="post">
+        {% csrf_token %}
+        <div class="form-actions">
+            <button type="submit" class="btn-delete">Delete</button>
+            <a href="{% url 'resource_list' %}" class="btn-cancel">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %} 

@@ -3,16 +3,13 @@ from . import views
 
 urlpatterns = [
     path('', views.home, name='home'),
-
-    # Resource URLs
-    path('resources/new/', views.ResourceCreateView.as_view(), name='resource_create'),
-    path('resources/<int:pk>/edit/', views.ResourceUpdateView.as_view(), name='resource_update'),
-    path('resources/<int:pk>/delete/', views.ResourceDeleteView.as_view(), name='resource_delete'),
-
-    # Mission URLs
-    path('missions/new/', views.MissionCreateView.as_view(), name='mission_create'),
-    path('missions/<int:pk>/edit/', views.MissionUpdateView.as_view(), name='mission_update'),
-    path('missions/<int:pk>/delete/', views.MissionDeleteView.as_view(), name='mission_delete'),
-
-    path('facturation-slr/', views.facturation_slr_view, name='facturation_slr'),
+    path('resources/', views.resource_list_view, name='resource_list'),
+    path('resources/create/', views.resource_create, name='resource_create'),
+    path('resources/<int:pk>/update/', views.resource_update, name='resource_update'),
+    path('resources/<int:pk>/delete/', views.resource_delete, name='resource_delete'),
+    path('missions/', views.mission_list_view, name='mission_list'),
+    path('missions/create/', views.mission_create, name='mission_create'),
+    path('missions/<int:pk>/update/', views.mission_update, name='mission_update'),
+    path('missions/<int:pk>/delete/', views.mission_delete, name='mission_delete'),
+    path('facturation-slr/', views.facturation_slr, name='facturation_slr'),
 ] 

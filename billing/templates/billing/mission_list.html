@@ -1,0 +1,43 @@
+{% extends "billing/base.html" %}
+
+{% block title %}Missions - Dashboard{% endblock %}
+{% block page_title %}Missions{% endblock %}
+
+{% block content %}
+<div class="table-wrapper">
+    <h2>Missions</h2>
+    <a href="{% url 'mission_create' %}" class="btn-add-new">Add New Mission</a>
+    <table>
+        <thead>
+            <tr>
+                <th>OTP L2</th>
+                <th>Libellé de Projet</th>
+                <th>Belgian Name</th>
+                <th>Type de Code</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for mission in missions %}
+            <tr>
+                <td>{{ mission.otp_l2 }}</td>
+                <td>{{ mission.libelle_de_projet|default:"-" }}</td>
+                <td>{{ mission.belgian_name }}</td>
+                <td>{{ mission.get_code_type_display }}</td>
+                <td class="action-buttons">
+                    <a href="{% url 'mission_update' mission.pk %}" class="btn-edit">Edit</a>
+                    <form action="{% url 'mission_delete' mission.pk %}" method="post" style="display: inline;">
+                        {% csrf_token %}
+                        <button type="submit" class="btn-delete" onclick="return confirm('Are you sure you want to delete this mission?');">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="5">No missions found.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %} 

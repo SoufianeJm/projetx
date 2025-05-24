@@ -1,9 +1,12 @@
-{% extends "billing/base.html" %}
+{% extends "billing/auth_base.html" %}
 
 {% block title %}Logged Out - SLR Billing{% endblock %}
- 
-{% block content %}
-<h2>Logged Out</h2>
-<p>You have been successfully logged out.</p>
-<p><a href="{% url 'login' %}">Click here to log in again</a></p>
+
+{% block auth_title %}Logged Out{% endblock %}
+{% block auth_subtitle %}You have been successfully logged out{% endblock %}
+
+{% block auth_content %}
+<div class="text-center">
+    <a href="{% url 'login' %}" class="btn btn-primary">Sign In Again</a>
+</div>
 {% endblock %} 

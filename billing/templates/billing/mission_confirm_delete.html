@@ -1,0 +1,18 @@
+{% extends "billing/base.html" %}
+
+{% block title %}Delete Mission - Dashboard{% endblock %}
+{% block page_title %}Delete Mission{% endblock %}
+
+{% block content %}
+<div class="table-wrapper">
+    <h2>Delete Mission</h2>
+    <p>Are you sure you want to delete the mission "{{ mission.otp_l2 }}"?</p>
+    <form method="post">
+        {% csrf_token %}
+        <div class="form-actions">
+            <button type="submit" class="btn-delete">Delete</button>
+            <a href="{% url 'mission_list' %}" class="btn-cancel">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %} 
