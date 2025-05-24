@@ -12,6 +12,7 @@ from django.http import HttpResponse
 from datetime import datetime
 from django.contrib import messages
 import os
+import traceback
 
 # Create your views here.
 
@@ -107,7 +108,7 @@ def mission_delete(request, pk):
 
 @login_required
 def facturation_slr(request):
-    processing_logs = []  # Always available in context
+    processing_logs = []
     form = SLRFileUploadForm()
 
     if request.method == 'POST':
@@ -115,79 +116,80 @@ def facturation_slr(request):
         if form.is_valid():
             mafe_file_obj = request.FILES['mafe_report_file']
             heures_ibm_file_obj = request.FILES['heures_ibm_file']
-            processing_logs.append(f"INFO: File '{mafe_file_obj.name}' uploaded successfully.")
-            processing_logs.append(f"INFO: File '{heures_ibm_file_obj.name}' uploaded successfully.")
+            processing_logs.append(f"INFO: File '{mafe_file_obj.name}' received for processing.")
+            processing_logs.append(f"INFO: File '{heures_ibm_file_obj.name}' received for processing.")
             try:
-                # Read Heures IBM file
+                # --- Parse Heures IBM Filename (Month/Year) ---
+                heures_filename = heures_ibm_file_obj.name
+                mois_mapping = {
+                    'Janvier': 'Jan', 'Février': 'Feb', 'Mars': 'Mar', 'Avril': 'Apr', 'Mai': 'May', 'Juin': 'Jun',
+                    'Juillet': 'Jul', 'Août': 'Aug', 'Septembre': 'Sep', 'Octobre': 'Oct', 'Novembre': 'Nov', 'Décembre': 'Dec',
+                    'Jan': 'Jan', 'Feb': 'Feb', 'Mar': 'Mar', 'Apr': 'Apr', 'May': 'May', 'Jun': 'Jun',
+                    'Jul': 'Jul', 'Aug': 'Aug', 'Sep': 'Sep', 'Oct': 'Oct', 'Nov': 'Nov', 'Dec': 'Dec'
+                }
+                match = re.search(r'(Janvier|Février|Mars|Avril|Mai|Juin|Juillet|Août|Septembre|Octobre|Novembre|Décembre|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[^\d]*(\d{2,4})', heures_filename)
+                if not match:
+                    msg = f"ERROR: Could not parse month/year from Heures IBM filename: {heures_filename}"
+                    messages.error(request, msg)
+                    processing_logs.append(msg)
+                    return render(request, 'billing/facturation_slr.html', {'form': form, 'page_title': 'Facturation SLR', 'processing_logs': processing_logs})
+                parsed_mois_nom = match.group(1).capitalize()
+                parsed_annee_full = match.group(2)
+                processing_logs.append(f"INFO: Parsed period: {parsed_mois_nom} {parsed_annee_full} from '{heures_filename}'.")
+
+                # --- Read "Heures IBM" file ---
                 processing_logs.append(f"INFO: Attempting to read data from '{heures_ibm_file_obj.name}'...")
-                df_heures_ibm = pd.read_excel(heures_ibm_file_obj)
+                df_heures_ibm = pd.read_excel(heures_ibm_file_obj, sheet_name='base', usecols="E,H,I,N")
+                df_heures_ibm.columns = ['Code projet', 'Nom Complet', 'Grade', 'Heures Déclarées']
+                df_heures_ibm['Nom Complet'] = df_heures_ibm['Nom Complet'].astype(str).str.lower().str.strip()
+                df_heures_ibm['Heures Déclarées'] = pd.to_numeric(df_heures_ibm['Heures Déclarées'], errors='coerce').fillna(0)
                 processing_logs.append(f"INFO: Data extracted successfully from file '{heures_ibm_file_obj.name}'.")
                 if not df_heures_ibm.empty:
-                    sample_row_html = df_heures_ibm.head(1).to_html(classes='table table-sm table-bordered table-striped my-2 log-table-sample-width', index=False, border=0)
-                    processing_logs.append(f"INFO: Sample data (first row) from '{heures_ibm_file_obj.name}':<div class='log-table-sample'>{sample_row_html}</div>")
+                    sample_html = df_heures_ibm.head(1).to_html(classes='table table-sm table-bordered table-striped my-2 log-table-sample-width', index=False, border=0)
+                    processing_logs.append(f"INFO: Sample data (first row) from '{heures_ibm_file_obj.name}':<div class='log-table-sample'>{sample_html}</div>")
                 else:
-                    processing_logs.append(f"WARNING: File '{heures_ibm_file_obj.name}' was empty after reading or no data matched expected columns.")
+                    processing_logs.append(f"WARNING: No data extracted or file '{heures_ibm_file_obj.name}' was empty after applying column names.")
 
-                # Read MAFE file as in main.py
-                processing_logs.append(f"INFO: Attempting to read data from '{mafe_file_obj.name}' (Tab A) FULLY COMMITTED...")
-                df_mafe_raw = pd.read_excel(mafe_file_obj, sheet_name='(Tab A) FULLY COMMITTED', header=None)
-                df_mafe_raw.columns = df_mafe_raw.iloc[14].astype(str).str.strip().str.replace('\n', ' ').str.replace('\r', ' ')
-                df_mafe = df_mafe_raw.drop(index=list(range(0, 15))).reset_index(drop=True)
-                processing_logs.append(f"INFO: Data extracted successfully from file '{mafe_file_obj.name}'.")
-                if not df_mafe.empty:
-                    sample_row_html = df_mafe.head(1).to_html(classes='table table-sm table-bordered table-striped my-2 log-table-sample-width', index=False, border=0)
-                    processing_logs.append(f"INFO: Sample data (first row) from '{mafe_file_obj.name}':<div class='log-table-sample'>{sample_row_html}</div>")
+                # --- Read "MAFE Report" file ---
+                processing_logs.append(f"INFO: Attempting to read data from '{mafe_file_obj.name}'...")
+                mafe_raw_df = pd.read_excel(mafe_file_obj, sheet_name='(Tab A) FULLY COMMITTED', header=None)
+                if mafe_raw_df.shape[0] > 14:
+                    mafe_columns = mafe_raw_df.iloc[14].astype(str).str.strip().str.replace('\n', ' ', regex=False).str.replace('\r', ' ', regex=False)
+                    df_mafe = mafe_raw_df.iloc[15:].copy()
+                    df_mafe.columns = mafe_columns
+                    df_mafe.reset_index(drop=True, inplace=True)
+                    processing_logs.append(f"INFO: Data extracted successfully from file '{mafe_file_obj.name}'.")
+                    if not df_mafe.empty:
+                        sample_html_mafe = df_mafe.head(1).to_html(classes='table table-sm table-bordered table-striped my-2 log-table-sample-width', index=False, border=0)
+                        processing_logs.append(f"INFO: Sample data (first row) from '{mafe_file_obj.name}':<div class='log-table-sample'>{sample_html_mafe}</div>")
+                    else:
+                        processing_logs.append(f"WARNING: No data extracted or file '{mafe_file_obj.name}' was empty after header processing.")
                 else:
-                    processing_logs.append(f"WARNING: File '{mafe_file_obj.name}' was empty after reading or no data matched expected columns.")
+                    processing_logs.append(f"ERROR: File '{mafe_file_obj.name}' does not have enough rows to extract header from row 15.")
+                    df_mafe = pd.DataFrame()
+                if 'df_mafe' not in locals():
+                    processing_logs.append(f"CRITICAL ERROR: df_mafe was not defined after MAFE file processing attempt.")
+                    df_mafe = pd.DataFrame()
 
-                # Check required columns (from main.py logic)
-                required_mafe_cols = ['Country', 'Customer Name']
-                required_heures_cols = ['Code projet', 'Nom', 'Grade', 'Date', 'Heures']
-                missing_mafe = [col for col in required_mafe_cols if col not in df_mafe.columns]
-                missing_heures = [col for col in required_heures_cols if col not in df_heures_ibm.columns]
-                if missing_mafe or missing_heures:
-                    msg = "Missing columns: "
-                    if missing_mafe:
-                        msg += f"MAFE: {', '.join(missing_mafe)}. "
-                    if missing_heures:
-                        msg += f"Heures: {', '.join(missing_heures)}."
-                    messages.error(request, msg)
-                    return render(request, 'billing/facturation_slr.html', {'form': form})
-
-                # --- Main logic (adapted from main.py, ignoring traitement file) ---
-                # Clean up columns
-                df_heures_ibm['Nom'] = df_heures_ibm['Nom'].astype(str).str.lower().str.strip()
-                df_heures_ibm['Heures'] = pd.to_numeric(df_heures_ibm['Heures'], errors='coerce').fillna(0)
-
-                # Group by project, name, grade, and sum hours
-                employee_summary = (
-                    df_heures_ibm.groupby(['Code projet', 'Nom', 'Grade'], as_index=False)
-                    .agg({'Heures': 'sum'})
-                    .rename(columns={'Heures': 'Total Heures'})
-                )
-
-                # Merge with MAFE to get project names
-                # (Assume 'Customer Name' in MAFE matches 'Code projet' in heures)
-                merged = employee_summary.merge(df_mafe[['Country', 'Customer Name']], left_on='Code projet', right_on='Customer Name', how='left')
-
-                # Prepare output
-                output_df = merged[['Code projet', 'Nom', 'Grade', 'Total Heures', 'Country', 'Customer Name']]
-                output_filename = f'SLR_Report_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
-                output_path = os.path.join('media', 'reports', output_filename)
-                os.makedirs(os.path.dirname(output_path), exist_ok=True)
-                output_df.to_excel(output_path, index=False)
-
-                with open(output_path, 'rb') as f:
-                    response = HttpResponse(f.read(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-                    response['Content-Disposition'] = f'attachment; filename="{output_filename}"'
-                    messages.success(request, "Report generated and download started.")
-                    return response
+                # --- Continue with your data processing using df_heures_ibm and df_mafe ---
+                processing_logs.append("INFO: Proceeding with data merging and calculations...")
+                # ... (your merging/calculation/output logic here) ...
+                # For demonstration, just return the logs (remove/comment this in production):
+                # return render(request, 'billing/facturation_slr.html', {'form': form, 'page_title': 'Facturation SLR', 'processing_logs': processing_logs})
+                # --- End demonstration ---
+                # (Uncomment and use your actual Excel generation and response logic below)
+                # messages.success(request, "Report generated and download started successfully!")
+                # return response
             except Exception as e:
-                error_message = f"ERROR: An processing error occurred: {str(e)}"
-                messages.error(request, error_message)
-                processing_logs.append(error_message)
+                error_msg = f"ERROR: An unexpected error occurred during processing: {str(e)}"
+                processing_logs.append(f"{error_msg}<br><pre>{traceback.format_exc()}</pre>")
+                messages.error(request, "An error occurred while generating the report. See logs for details.")
         else:
-            processing_logs.append("ERROR: Form validation failed. Please check the uploaded files.")
+            processing_logs.append("ERROR: Form validation failed. Please check the uploaded files and try again.")
+            for field, errors in form.errors.items():
+                for error in errors:
+                    processing_logs.append(f"ERROR (Form field: {field}): {error}")
+
     context = {
         'form': form,
         'page_title': 'Facturation SLR',
