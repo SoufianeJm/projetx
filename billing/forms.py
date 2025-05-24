@@ -4,7 +4,7 @@ from .models import Resource, Mission
 class ResourceForm(forms.ModelForm):
     class Meta:
         model = Resource
-        fields = ['full_name', 'picture', 'matricule', 'rate_ibm', 'rate_des', 'rank']
+        fields = ['full_name', 'picture', 'matricule', 'grade', 'grade_des', 'rate_ibm', 'rate_des']
 
 class MissionForm(forms.ModelForm):
     class Meta:

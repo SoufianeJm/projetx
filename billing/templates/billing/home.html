@@ -15,9 +15,10 @@
                     <th>Full Name</th>
                     <th>Picture</th>
                     <th>Matricule</th>
+                    <th>Grade</th>
+                    <th>Grade DES</th>
                     <th>Rate IBM</th>
                     <th>Rate DES</th>
-                    <th>Rank</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -33,9 +34,10 @@
                         {% endif %}
                     </td>
                     <td>{{ resource.matricule }}</td>
+                    <td>{{ resource.get_grade_display }}</td>
+                    <td>{{ resource.get_grade_des_display }}</td>
                     <td>{{ resource.rate_ibm }}</td>
                     <td>{{ resource.rate_des }}</td>
-                    <td>{{ resource.rank }}</td>
                     <td class="action-buttons">
                         <a href="{% url 'resource_update' resource.pk %}" class="btn-edit">Edit</a>
                         <form action="{% url 'resource_delete' resource.pk %}" method="post" style="display: inline;">
@@ -46,7 +48,7 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="7">No resources found.</td>
+                    <td colspan="8">No resources found.</td>
                 </tr>
                 {% endfor %}
             </tbody>
