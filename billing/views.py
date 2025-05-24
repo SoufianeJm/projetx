@@ -118,6 +118,7 @@ def facturation_slr(request):
             processing_logs.append(f"INFO: File '{mafe_file_obj.name}' uploaded successfully.")
             processing_logs.append(f"INFO: File '{heures_ibm_file_obj.name}' uploaded successfully.")
             try:
+                # Read Heures IBM file
                 processing_logs.append(f"INFO: Attempting to read data from '{heures_ibm_file_obj.name}'...")
                 df_heures_ibm = pd.read_excel(heures_ibm_file_obj)
                 processing_logs.append(f"INFO: Data extracted successfully from file '{heures_ibm_file_obj.name}'.")
@@ -126,11 +127,24 @@ def facturation_slr(request):
                     processing_logs.append(f"INFO: Sample data (first row) from '{heures_ibm_file_obj.name}':<div class='log-table-sample'>{sample_row_html}</div>")
                 else:
                     processing_logs.append(f"WARNING: File '{heures_ibm_file_obj.name}' was empty after reading or no data matched expected columns.")
+
+                # Read MAFE file as in main.py
+                processing_logs.append(f"INFO: Attempting to read data from '{mafe_file_obj.name}' (Tab A) FULLY COMMITTED...")
+                df_mafe_raw = pd.read_excel(mafe_file_obj, sheet_name='(Tab A) FULLY COMMITTED', header=None)
+                df_mafe_raw.columns = df_mafe_raw.iloc[14].astype(str).str.strip().str.replace('\n', ' ').str.replace('\r', ' ')
+                df_mafe = df_mafe_raw.drop(index=list(range(0, 15))).reset_index(drop=True)
+                processing_logs.append(f"INFO: Data extracted successfully from file '{mafe_file_obj.name}'.")
+                if not df_mafe.empty:
+                    sample_row_html = df_mafe.head(1).to_html(classes='table table-sm table-bordered table-striped my-2 log-table-sample-width', index=False, border=0)
+                    processing_logs.append(f"INFO: Sample data (first row) from '{mafe_file_obj.name}':<div class='log-table-sample'>{sample_row_html}</div>")
+                else:
+                    processing_logs.append(f"WARNING: File '{mafe_file_obj.name}' was empty after reading or no data matched expected columns.")
+
                 # Check required columns (from main.py logic)
                 required_mafe_cols = ['Country', 'Customer Name']
                 required_heures_cols = ['Code projet', 'Nom', 'Grade', 'Date', 'Heures']
                 missing_mafe = [col for col in required_mafe_cols if col not in df_mafe.columns]
-                missing_heures = [col for col in required_heures_cols if col not in df_heures.columns]
+                missing_heures = [col for col in required_heures_cols if col not in df_heures_ibm.columns]
                 if missing_mafe or missing_heures:
                     msg = "Missing columns: "
                     if missing_mafe:
@@ -142,12 +156,12 @@ def facturation_slr(request):
 
                 # --- Main logic (adapted from main.py, ignoring traitement file) ---
                 # Clean up columns
-                df_heures['Nom'] = df_heures['Nom'].astype(str).str.lower().str.strip()
-                df_heures['Heures'] = pd.to_numeric(df_heures['Heures'], errors='coerce').fillna(0)
+                df_heures_ibm['Nom'] = df_heures_ibm['Nom'].astype(str).str.lower().str.strip()
+                df_heures_ibm['Heures'] = pd.to_numeric(df_heures_ibm['Heures'], errors='coerce').fillna(0)
 
                 # Group by project, name, grade, and sum hours
                 employee_summary = (
-                    df_heures.groupby(['Code projet', 'Nom', 'Grade'], as_index=False)
+                    df_heures_ibm.groupby(['Code projet', 'Nom', 'Grade'], as_index=False)
                     .agg({'Heures': 'sum'})
                     .rename(columns={'Heures': 'Total Heures'})
                 )
@@ -166,6 +180,7 @@ def facturation_slr(request):
                 with open(output_path, 'rb') as f:
                     response = HttpResponse(f.read(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
                     response['Content-Disposition'] = f'attachment; filename="{output_filename}"'
+                    messages.success(request, "Report generated and download started.")
                     return response
             except Exception as e:
                 error_message = f"ERROR: An processing error occurred: {str(e)}"
