@@ -112,90 +112,55 @@ def facturation_slr(request):
         if form.is_valid():
             mafe_report_file = request.FILES['mafe_report_file']
             heures_ibm_file = request.FILES['heures_ibm_file']
-            
-            # Read the MAFE report
-            df_mafe = pd.read_excel(mafe_report_file)
-            
-            # Read the heures IBM file
-            df_heures = pd.read_excel(heures_ibm_file)
-            
-            # Get resources from database
-            db_resources_data = []
-            for r in Resource.objects.all():
-                db_resources_data.append({
-                    'Nom Complet DB': str(r.full_name).lower().strip(),
-                    'Rank DB': r.get_grade_display(),
-                    'Grade DES DB': r.get_grade_des_display(),
-                    'Rate IBM DB': r.rate_ibm,
-                    'Rate DES DB': r.rate_des
-                })
-            db_resources = pd.DataFrame(db_resources_data)
-            
-            # Get missions from database
-            db_missions_data = []
-            for m in Mission.objects.all():
-                db_missions_data.append({
-                    'OTP L2 DB': m.otp_l2,
-                    'Libellé Projet DB': m.libelle_de_projet or m.belgian_name
-                })
-            db_missions = pd.DataFrame(db_missions_data)
-            
-            # Process the data
-            df_mafe['Nom Complet'] = df_mafe['Nom Complet'].str.lower().str.strip()
-            df_heures['Nom Complet'] = df_heures['Nom Complet'].str.lower().str.strip()
-            
-            # Merge hours data
-            df_agg_hours = df_heures.groupby(['Nom Complet', 'OTP L2'])['Heures'].sum().reset_index()
-            
-            # Merge with database resources
-            final_df = pd.merge(df_agg_hours, db_resources, left_on='Nom Complet', right_on='Nom Complet DB', how='left')
-            
-            # Merge with database missions
-            final_df = pd.merge(final_df, db_missions, left_on='OTP L2', right_on='OTP L2 DB', how='left')
-            
-            # Calculate totals
-            final_df['Total IBM'] = final_df['Heures'] * final_df['Rate IBM DB']
-            final_df['Total DES'] = final_df['Heures'] * final_df['Rate DES DB']
-            
+            try:
+                # Read the MAFE report
+                df_mafe = pd.read_excel(mafe_report_file)
+                # Read the heures IBM file
+                df_heures = pd.read_excel(heures_ibm_file)
+            except Exception as e:
+                messages.error(request, f"Error reading Excel files: {e}")
+                return render(request, 'billing/facturation_slr.html', {'form': form})
+
+            # Check required columns (from main.py logic)
+            required_mafe_cols = ['Country', 'Customer Name']
+            required_heures_cols = ['Code projet', 'Nom', 'Grade', 'Date', 'Heures']
+            missing_mafe = [col for col in required_mafe_cols if col not in df_mafe.columns]
+            missing_heures = [col for col in required_heures_cols if col not in df_heures.columns]
+            if missing_mafe or missing_heures:
+                msg = "Missing columns: "
+                if missing_mafe:
+                    msg += f"MAFE: {', '.join(missing_mafe)}. "
+                if missing_heures:
+                    msg += f"Heures: {', '.join(missing_heures)}."
+                messages.error(request, msg)
+                return render(request, 'billing/facturation_slr.html', {'form': form})
+
+            # --- Main logic (adapted from main.py, ignoring traitement file) ---
+            # Clean up columns
+            df_heures['Nom'] = df_heures['Nom'].astype(str).str.lower().str.strip()
+            df_heures['Heures'] = pd.to_numeric(df_heures['Heures'], errors='coerce').fillna(0)
+
+            # Group by project, name, grade, and sum hours
+            employee_summary = (
+                df_heures.groupby(['Code projet', 'Nom', 'Grade'], as_index=False)
+                .agg({'Heures': 'sum'})
+                .rename(columns={'Heures': 'Total Heures'})
+            )
+
+            # Merge with MAFE to get project names
+            # (Assume 'Customer Name' in MAFE matches 'Code projet' in heures)
+            merged = employee_summary.merge(df_mafe[['Country', 'Customer Name']], left_on='Code projet', right_on='Customer Name', how='left')
+
             # Prepare output
-            output_df = final_df[[
-                'Libellé Projet DB',
-                'Nom Complet',
-                'Rank DB',
-                'Total Heures',
-                'Rate DES DB',
-                'Rate IBM DB',
-                'Total IBM',
-                'Total DES'
-            ]]
-            
-            output_df.columns = [
-                'Libellé Projet',
-                'Full Name (from file)',
-                'Rank',
-                'Total Heures',
-                'Rate DES',
-                'Rate IBM',
-                'Total IBM',
-                'Total DES'
-            ]
-            
-            # Fill NaN values
-            output_df[['Rank', 'Rate DES', 'Rate IBM', 'Total IBM', 'Total DES']] = \
-                output_df[['Rank', 'Rate DES', 'Rate IBM', 'Total IBM', 'Total DES']].fillna(0)
-            
-            # Generate Excel file
+            output_df = merged[['Code projet', 'Nom', 'Grade', 'Total Heures', 'Country', 'Customer Name']]
             output_filename = f'SLR_Report_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
             output_path = os.path.join('media', 'reports', output_filename)
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
-            
             output_df.to_excel(output_path, index=False)
-            
-            # Return the file
+
             with open(output_path, 'rb') as f:
                 response = HttpResponse(f.read(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
                 response['Content-Disposition'] = f'attachment; filename="{output_filename}"'
-                messages.info(request, 'SLR report generated!')
                 return response
     else:
         form = SLRFileUploadForm()
