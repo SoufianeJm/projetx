@@ -143,11 +143,11 @@ def facturation_slr_view(request):
                 db_resources['Nom Complet DB'] = db_resources['Nom Complet DB'].astype(str).str.lower().str.strip()
 
                 db_missions = pd.DataFrame.from_records(
-                    Mission.objects.all().values('otp_l2', 'belgian_name')
+                    Mission.objects.all().values('otp_l2', 'belgian_name', 'libelle_de_projet')
                 )
                 db_missions.rename(columns={
                     'otp_l2': 'Code projet DB',
-                    'belgian_name': 'Libellé Projet DB'
+                    'libelle_de_projet': 'Libellé Projet DB'
                 }, inplace=True)
 
                 # Merge data

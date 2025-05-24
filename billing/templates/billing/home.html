@@ -60,6 +60,7 @@
             <thead>
                 <tr>
                     <th>OTP L2</th>
+                    <th>Libellé de Projet</th>
                     <th>Belgian Name</th>
                     <th>Comment</th>
                     <th>Actions</th>
@@ -69,6 +70,7 @@
                 {% for mission in missions %}
                 <tr>
                     <td>{{ mission.otp_l2 }}</td>
+                    <td>{{ mission.libelle_de_projet|default:"-" }}</td>
                     <td>{{ mission.belgian_name }}</td>
                     <td>{{ mission.comment|truncatewords:10 }}</td>
                     <td class="action-buttons">
