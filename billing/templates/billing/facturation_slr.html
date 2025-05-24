@@ -26,6 +26,20 @@
             <div class="accepted-types">Accepted files: <b>XLSX</b></div>
             <button type="submit" class="btn-facturation">Generate and Download Report</button>
         </form>
+        {% if processing_logs %}
+        <div class="mt-4 card">
+            <div class="card-header">
+                Processing Logs
+            </div>
+            <ul class="list-group list-group-flush" id="processing-log-list">
+                {% for log_entry in processing_logs %}
+                    <li class="list-group-item {% if 'ERROR:' in log_entry %}list-group-item-danger{% elif 'WARNING:' in log_entry %}list-group-item-warning{% else %}list-group-item-light{% endif %}">
+                        {{ log_entry|safe }}
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
     </div>
 </div>
 
@@ -134,6 +148,21 @@
     }
     .btn-facturation:hover {
         background: #6d9a1d;
+    }
+    .log-table-sample table {
+        font-size: 0.8rem;
+        margin-top: 5px !important;
+        margin-bottom: 0 !important;
+        width: auto !important;
+        max-width: 100%;
+        overflow-x: auto;
+    }
+    .log-table-sample th, .log-table-sample td {
+        padding: 2px 4px !important;
+    }
+    .list-group-item div.log-table-sample {
+        max-width: 100%;
+        overflow-x: auto;
     }
 </style>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />

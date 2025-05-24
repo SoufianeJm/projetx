@@ -107,61 +107,75 @@ def mission_delete(request, pk):
 
 @login_required
 def facturation_slr(request):
+    processing_logs = []  # Always available in context
+    form = SLRFileUploadForm()
+
     if request.method == 'POST':
         form = SLRFileUploadForm(request.POST, request.FILES)
         if form.is_valid():
-            mafe_report_file = request.FILES['mafe_report_file']
-            heures_ibm_file = request.FILES['heures_ibm_file']
+            mafe_file_obj = request.FILES['mafe_report_file']
+            heures_ibm_file_obj = request.FILES['heures_ibm_file']
+            processing_logs.append(f"INFO: File '{mafe_file_obj.name}' uploaded successfully.")
+            processing_logs.append(f"INFO: File '{heures_ibm_file_obj.name}' uploaded successfully.")
             try:
-                # Read the MAFE report
-                df_mafe = pd.read_excel(mafe_report_file)
-                # Read the heures IBM file
-                df_heures = pd.read_excel(heures_ibm_file)
+                processing_logs.append(f"INFO: Attempting to read data from '{heures_ibm_file_obj.name}'...")
+                df_heures_ibm = pd.read_excel(heures_ibm_file_obj)
+                processing_logs.append(f"INFO: Data extracted successfully from file '{heures_ibm_file_obj.name}'.")
+                if not df_heures_ibm.empty:
+                    sample_row_html = df_heures_ibm.head(1).to_html(classes='table table-sm table-bordered table-striped my-2 log-table-sample-width', index=False, border=0)
+                    processing_logs.append(f"INFO: Sample data (first row) from '{heures_ibm_file_obj.name}':<div class='log-table-sample'>{sample_row_html}</div>")
+                else:
+                    processing_logs.append(f"WARNING: File '{heures_ibm_file_obj.name}' was empty after reading or no data matched expected columns.")
+                # Check required columns (from main.py logic)
+                required_mafe_cols = ['Country', 'Customer Name']
+                required_heures_cols = ['Code projet', 'Nom', 'Grade', 'Date', 'Heures']
+                missing_mafe = [col for col in required_mafe_cols if col not in df_mafe.columns]
+                missing_heures = [col for col in required_heures_cols if col not in df_heures.columns]
+                if missing_mafe or missing_heures:
+                    msg = "Missing columns: "
+                    if missing_mafe:
+                        msg += f"MAFE: {', '.join(missing_mafe)}. "
+                    if missing_heures:
+                        msg += f"Heures: {', '.join(missing_heures)}."
+                    messages.error(request, msg)
+                    return render(request, 'billing/facturation_slr.html', {'form': form})
+
+                # --- Main logic (adapted from main.py, ignoring traitement file) ---
+                # Clean up columns
+                df_heures['Nom'] = df_heures['Nom'].astype(str).str.lower().str.strip()
+                df_heures['Heures'] = pd.to_numeric(df_heures['Heures'], errors='coerce').fillna(0)
+
+                # Group by project, name, grade, and sum hours
+                employee_summary = (
+                    df_heures.groupby(['Code projet', 'Nom', 'Grade'], as_index=False)
+                    .agg({'Heures': 'sum'})
+                    .rename(columns={'Heures': 'Total Heures'})
+                )
+
+                # Merge with MAFE to get project names
+                # (Assume 'Customer Name' in MAFE matches 'Code projet' in heures)
+                merged = employee_summary.merge(df_mafe[['Country', 'Customer Name']], left_on='Code projet', right_on='Customer Name', how='left')
+
+                # Prepare output
+                output_df = merged[['Code projet', 'Nom', 'Grade', 'Total Heures', 'Country', 'Customer Name']]
+                output_filename = f'SLR_Report_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+                output_path = os.path.join('media', 'reports', output_filename)
+                os.makedirs(os.path.dirname(output_path), exist_ok=True)
+                output_df.to_excel(output_path, index=False)
+
+                with open(output_path, 'rb') as f:
+                    response = HttpResponse(f.read(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+                    response['Content-Disposition'] = f'attachment; filename="{output_filename}"'
+                    return response
             except Exception as e:
-                messages.error(request, f"Error reading Excel files: {e}")
-                return render(request, 'billing/facturation_slr.html', {'form': form})
-
-            # Check required columns (from main.py logic)
-            required_mafe_cols = ['Country', 'Customer Name']
-            required_heures_cols = ['Code projet', 'Nom', 'Grade', 'Date', 'Heures']
-            missing_mafe = [col for col in required_mafe_cols if col not in df_mafe.columns]
-            missing_heures = [col for col in required_heures_cols if col not in df_heures.columns]
-            if missing_mafe or missing_heures:
-                msg = "Missing columns: "
-                if missing_mafe:
-                    msg += f"MAFE: {', '.join(missing_mafe)}. "
-                if missing_heures:
-                    msg += f"Heures: {', '.join(missing_heures)}."
-                messages.error(request, msg)
-                return render(request, 'billing/facturation_slr.html', {'form': form})
-
-            # --- Main logic (adapted from main.py, ignoring traitement file) ---
-            # Clean up columns
-            df_heures['Nom'] = df_heures['Nom'].astype(str).str.lower().str.strip()
-            df_heures['Heures'] = pd.to_numeric(df_heures['Heures'], errors='coerce').fillna(0)
-
-            # Group by project, name, grade, and sum hours
-            employee_summary = (
-                df_heures.groupby(['Code projet', 'Nom', 'Grade'], as_index=False)
-                .agg({'Heures': 'sum'})
-                .rename(columns={'Heures': 'Total Heures'})
-            )
-
-            # Merge with MAFE to get project names
-            # (Assume 'Customer Name' in MAFE matches 'Code projet' in heures)
-            merged = employee_summary.merge(df_mafe[['Country', 'Customer Name']], left_on='Code projet', right_on='Customer Name', how='left')
-
-            # Prepare output
-            output_df = merged[['Code projet', 'Nom', 'Grade', 'Total Heures', 'Country', 'Customer Name']]
-            output_filename = f'SLR_Report_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
-            output_path = os.path.join('media', 'reports', output_filename)
-            os.makedirs(os.path.dirname(output_path), exist_ok=True)
-            output_df.to_excel(output_path, index=False)
-
-            with open(output_path, 'rb') as f:
-                response = HttpResponse(f.read(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-                response['Content-Disposition'] = f'attachment; filename="{output_filename}"'
-                return response
-    else:
-        form = SLRFileUploadForm()
-    return render(request, 'billing/facturation_slr.html', {'form': form})
+                error_message = f"ERROR: An processing error occurred: {str(e)}"
+                messages.error(request, error_message)
+                processing_logs.append(error_message)
+        else:
+            processing_logs.append("ERROR: Form validation failed. Please check the uploaded files.")
+    context = {
+        'form': form,
+        'page_title': 'Facturation SLR',
+        'processing_logs': processing_logs
+    }
+    return render(request, 'billing/facturation_slr.html', context)
