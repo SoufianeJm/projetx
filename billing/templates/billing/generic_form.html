@@ -1,0 +1,14 @@
+{% extends "billing/base.html" %}
+
+{% block title %}{{ page_title|default:"Form" }}{% endblock %}
+{% block page_title %}{{ page_title|default:"Form" }}{% endblock %}
+
+{% block content %}
+<h2>{{ form_title|default:"Submit Form" }}</h2>
+<form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit" class="btn-add-new">Save</button>
+    <a href="{% url 'home' %}" style="margin-left:10px;">Cancel</a>
+</form>
+{% endblock %} 

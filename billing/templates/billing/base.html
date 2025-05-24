@@ -1,0 +1,249 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Deloitte SLR Billing{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'billing/css/style.css' %}">
+    <style>
+        body { 
+            font-family: sans-serif; 
+            margin: 0; 
+            min-height: 100vh; 
+        }
+        body.dashboard { 
+            display: flex; 
+        }
+        .sidebar { 
+            width: 220px; 
+            background-color: #f4f4f4; 
+            padding: 20px; 
+            border-right: 1px solid #ddd;
+            transition: transform 0.3s ease;
+        }
+        .sidebar.collapsed {
+            transform: translateX(-220px);
+        }
+        .sidebar-toggle {
+            position: fixed;
+            left: 220px;
+            top: 15px;
+            /* Align with header */
+            background-color: #333;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            cursor: pointer;
+            z-index: 1001;
+            transition: left 0.3s ease;
+            border-radius: 4px;
+        }
+        .sidebar-toggle.collapsed {
+            left: 0;
+        }
+        .sidebar h2 { 
+            margin-top: 0; 
+            font-size: 1.5em; 
+        }
+        .sidebar ul { 
+            list-style-type: none; 
+            padding: 0; 
+        }
+        .sidebar ul li a { 
+            text-decoration: none; 
+            color: #333; 
+            display: block; 
+            padding: 10px 0; 
+            border-bottom: 1px solid #eee; 
+        }
+        .sidebar ul li a:hover { 
+            background-color: #e9e9e9; 
+        }
+        .main-content { 
+            padding: 20px; 
+            transition: margin-left 0.3s ease;
+        }
+        body.dashboard .main-content { 
+            flex-grow: 1; 
+            margin-left: 0;
+        }
+        body.dashboard .main-content.sidebar-collapsed {
+            margin-left: -220px;
+        }
+        .header-nav { 
+            background-color: #333; 
+            color: white; 
+            padding: 10px 20px; 
+            text-align: right; 
+            position: fixed; 
+            top: 0; 
+            left: 220px; 
+            right: 0; 
+            z-index: 1000; 
+            height: 40px; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center;
+            transition: left 0.3s ease;
+        }
+        .header-nav.sidebar-collapsed {
+            left: 0;
+        }
+        .header-nav p { 
+            margin: 0; 
+        }
+        .header-user-profile {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .header-user-profile img {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            object-fit: cover;
+            background: #fff;
+            border: 1px solid #ccc;
+        }
+        .header-user-profile span {
+            font-weight: 500;
+        }
+        .header-nav a, .header-nav button {
+            color: white;
+            text-decoration: none;
+            margin-left: 15px;
+        }
+        .content-below-header { 
+            margin-top: 0; 
+        }
+        body.dashboard .content-below-header { 
+            margin-top: 50px; 
+        }
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-bottom: 20px; 
+        }
+        th, td { 
+            border: 1px solid #ddd; 
+            padding: 8px; 
+            text-align: left; 
+        }
+        th { 
+            background-color: #f0f0f0; 
+        }
+        .action-buttons a, .action-buttons button { 
+            margin-right: 5px; 
+            text-decoration: none; 
+            padding: 5px 8px; 
+            font-size: 0.9em; 
+            border-radius: 3px;
+        }
+        .btn-edit { 
+            background-color: #ffc107; 
+            color: black; 
+            border: none;
+        }
+        .btn-delete { 
+            background-color: #dc3545; 
+            color: white; 
+            border: none; 
+            cursor: pointer;
+        }
+        .btn-add-new { 
+            background-color: #007bff; 
+            color: white; 
+            padding: 10px 15px; 
+            text-decoration: none; 
+            border-radius: 5px; 
+            display: inline-block; 
+            margin-bottom: 15px; 
+        }
+        .tables-container { 
+            display: flex; 
+            flex-wrap: wrap; 
+            gap: 20px; 
+        }
+        .table-wrapper { 
+            flex: 1; 
+            min-width: 400px; 
+        }
+    </style>
+</head>
+<body class="{% if not request.resolver_match.url_name in 'login,password_reset,password_reset_done,password_reset_confirm,password_reset_complete' %}dashboard{% endif %}">
+    {% if not request.resolver_match.url_name in 'login,password_reset,password_reset_done,password_reset_confirm,password_reset_complete' %}
+    <button class="sidebar-toggle" id="sidebarToggle" title="Toggle Sidebar">☰</button>
+    <aside class="sidebar" id="sidebar">
+        <h2>Deloitte SLR</h2>
+        <ul>
+            <li><a href="{% url 'home' %}">Accueil</a></li>
+            <li><a href="#">Page 2 (Placeholder)</a></li>
+            <li><a href="#">Page 3 (Placeholder)</a></li>
+        </ul>
+         <div style="position: absolute; bottom: 20px;">
+            <p>&copy; Deloitte {% now "Y" %}</p>
+        </div>
+    </aside>
+    {% endif %}
+    <div class="main-content" id="mainContent">
+        {% if not request.resolver_match.url_name in 'login,password_reset,password_reset_done,password_reset_confirm,password_reset_complete' %}
+        <header class="header-nav" id="headerNav">
+             <p>{% block page_title %}Dashboard{% endblock %}</p>
+            <div class="header-user-profile">
+                {% if user.is_authenticated %}
+                    <img src="https://ui-avatars.com/api/?name={{ user.username|urlencode }}&background=007bff&color=fff&size=64" alt="Profile" />
+                    <span>{{ user.username }}</span>
+                    <form method="post" action="{% url 'logout' %}" style="display: inline;">
+                        {% csrf_token %}
+                        <button type="submit" style="background: none; border: none; color: white; cursor: pointer;">Logout</button>
+                    </form>
+                {% else %}
+                    <a href="{% url 'login' %}">Login</a>
+                {% endif %}
+            </div>
+        </header>
+        {% endif %}
+        <div class="content-below-header">
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+            
+            {% block content %}
+            {% endblock %}
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const sidebar = document.getElementById('sidebar');
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            const mainContent = document.getElementById('mainContent');
+            const headerNav = document.getElementById('headerNav');
+            
+            // Check if there's a saved state
+            const isSidebarCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+            if (isSidebarCollapsed) {
+                sidebar.classList.add('collapsed');
+                sidebarToggle.classList.add('collapsed');
+                mainContent.classList.add('sidebar-collapsed');
+                headerNav.classList.add('sidebar-collapsed');
+            }
+
+            sidebarToggle.addEventListener('click', function() {
+                sidebar.classList.toggle('collapsed');
+                sidebarToggle.classList.toggle('collapsed');
+                mainContent.classList.toggle('sidebar-collapsed');
+                headerNav.classList.toggle('sidebar-collapsed');
+                
+                // Save the state
+                localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
+            });
+        });
+    </script>
+</body>
+</html> 

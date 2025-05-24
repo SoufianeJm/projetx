@@ -1,0 +1,23 @@
+{% extends "billing/base.html" %}
+
+{% block title %}Login - SLR Billing{% endblock %}
+
+{% block content %}
+<h2>Login</h2>
+{% if form.errors %}
+    <div class="alert alert-error">
+        Your username and password didn't match. Please try again.
+    </div>
+{% endif %}
+<form method="post" action="{% url 'login' %}">
+    {% csrf_token %}
+    <table>
+        {{ form.as_table }}
+    </table>
+    <button type="submit">Login</button>
+    <input type="hidden" name="next" value="{{ next }}">
+</form>
+<p style="margin-top: 1rem; text-align: center;">
+    <a href="{% url 'password_reset' %}" style="color: var(--secondary-color);">Forgot password?</a>
+</p>
+{% endblock %} 

@@ -1,0 +1,14 @@
+{% extends "billing/base.html" %}
+
+{% block title %}{{ page_title|default:"Confirm Delete" }}{% endblock %}
+{% block page_title %}{{ page_title|default:"Confirm Delete" }}{% endblock %}
+
+{% block content %}
+<h2>{{ page_title|default:"Confirm Delete" }}</h2>
+<p>Are you sure you want to delete "{{ item_name|default:"this item" }}"?</p>
+<form method="post">
+    {% csrf_token %}
+    <button type="submit" class="btn-delete">Yes, Delete</button>
+    <a href="{% url 'home' %}" style="margin-left:10px;">Cancel</a>
+</form>
+{% endblock %} 

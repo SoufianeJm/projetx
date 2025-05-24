@@ -1,0 +1,91 @@
+{% extends "billing/base.html" %}
+
+{% block title %}Accueil - Dashboard{% endblock %}
+
+{% block page_title %}Accueil{% endblock %}
+
+{% block content %}
+<div class="tables-container">
+    <div class="table-wrapper">
+        <h2>Resources</h2>
+        <a href="{% url 'resource_create' %}" class="btn-add-new">Add New Resource</a>
+        <table>
+            <thead>
+                <tr>
+                    <th>Full Name</th>
+                    <th>Picture</th>
+                    <th>Matricule</th>
+                    <th>Rate IBM</th>
+                    <th>Rate DES</th>
+                    <th>Rank</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for resource in resources %}
+                <tr>
+                    <td>{{ resource.full_name }}</td>
+                    <td>
+                        {% if resource.picture %}
+                            <img src="{{ resource.picture.url }}" alt="{{ resource.full_name }}" style="width: 50px; height: auto; border-radius: 50%;">
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </td>
+                    <td>{{ resource.matricule }}</td>
+                    <td>{{ resource.rate_ibm }}</td>
+                    <td>{{ resource.rate_des }}</td>
+                    <td>{{ resource.rank }}</td>
+                    <td class="action-buttons">
+                        <a href="{% url 'resource_update' resource.pk %}" class="btn-edit">Edit</a>
+                        <form action="{% url 'resource_delete' resource.pk %}" method="post" style="display: inline;">
+                            {% csrf_token %}
+                            <button type="submit" class="btn-delete" onclick="return confirm('Are you sure you want to delete this resource?');">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7">No resources found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="table-wrapper">
+        <h2>Missions</h2>
+        <a href="{% url 'mission_create' %}" class="btn-add-new">Add New Mission</a>
+        <table>
+            <thead>
+                <tr>
+                    <th>OTP L2</th>
+                    <th>Belgian Name</th>
+                    <th>Comment</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for mission in missions %}
+                <tr>
+                    <td>{{ mission.otp_l2 }}</td>
+                    <td>{{ mission.belgian_name }}</td>
+                    <td>{{ mission.comment|truncatewords:10 }}</td>
+                    <td class="action-buttons">
+                        <a href="{% url 'mission_update' mission.pk %}" class="btn-edit">Edit</a>
+                        <form action="{% url 'mission_delete' mission.pk %}" method="post" style="display: inline;">
+                            {% csrf_token %}
+                            <button type="submit" class="btn-delete" onclick="return confirm('Are you sure you want to delete this mission?');">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="4">No missions found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %} 
