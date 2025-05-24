@@ -9,7 +9,7 @@ class ResourceForm(forms.ModelForm):
 class MissionForm(forms.ModelForm):
     class Meta:
         model = Mission
-        fields = ['otp_l2', 'belgian_name', 'libelle_de_projet', 'comment']
+        fields = ['otp_l2', 'belgian_name', 'libelle_de_projet', 'code_type']
 
 class SLRFileUploadForm(forms.Form):
     mafe_report_file = forms.FileField(

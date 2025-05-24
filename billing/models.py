@@ -18,13 +18,28 @@ class Resource(models.Model):
         return reverse('resource_detail', kwargs={'pk': self.pk})
 
 class Mission(models.Model):
+    # Define choices for code_type
+    CODE_FRANCE = 'FR'
+    CODE_DES = 'DES'
+    CODE_TYPE_CHOICES = [
+        (CODE_FRANCE, 'Code France'),
+        (CODE_DES, 'Code DES'),
+    ]
+
     otp_l2 = models.CharField(max_length=100, unique=True, verbose_name="OTP L2 (Swift Code)")
     belgian_name = models.CharField(max_length=255, verbose_name="Belgian Name")
     libelle_de_projet = models.CharField(max_length=255, verbose_name="Libellé de Projet", blank=True, null=True)
-    comment = models.TextField(blank=True, null=True, verbose_name="Comment")
+    code_type = models.CharField(
+        max_length=3,
+        choices=CODE_TYPE_CHOICES,
+        default=CODE_FRANCE,
+        verbose_name="Type de Code",
+        blank=False,
+        null=False
+    )
 
     def __str__(self):
-        return f"{self.otp_l2} - {self.libelle_de_projet or self.belgian_name}"
+        return f"{self.otp_l2} - {self.libelle_de_projet or self.belgian_name} ({self.get_code_type_display()})"
 
     def get_absolute_url(self):
         return reverse('mission_detail', kwargs={'pk': self.pk})
