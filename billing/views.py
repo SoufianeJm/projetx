@@ -153,13 +153,13 @@ def facturation_slr(request):
 
                 # --- Fetch Mission Data ---
                 missions_qs = Mission.objects.all()
-                db_missions_df = pd.DataFrame(list(missions_qs.values('otp_l2', 'libelle_de_projet', 'belgian_name', 'code_type')))
+                db_missions_df = pd.DataFrame(list(missions_qs.values('otp_l2', 'belgian_name', 'libelle_de_projet', 'code_type')))
                 if db_missions_df.empty:
                     processing_logs.append("ERROR: No missions found in the database.")
                     return render(request, 'billing/facturation_slr.html', {'form': form, 'page_title': 'Facturation SLR', 'processing_logs': processing_logs})
                 db_missions_df['Code projet DB'] = db_missions_df['otp_l2']
-                db_missions_df['Libelle Projet DB'] = db_missions_df['libelle_de_projet'].fillna('')
-                db_missions_df['Belgian Name DB'] = db_missions_df['belgian_name']
+                db_missions_df['Libelle Projet DB'] = db_missions_df['belgian_name'].fillna('')
+                db_missions_df['Belgian Name DB'] = db_missions_df['libelle_de_projet']
                 processing_logs.append(f"INFO: Mission data loaded. Sample:<div class='log-table-sample'>{db_missions_df.head(1).to_html(classes='table table-sm table-bordered table-striped my-2 log-table-sample-width', index=False, border=0)}</div>")
 
                 # --- Read Heures IBM file (base_df) ---
