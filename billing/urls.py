@@ -13,4 +13,6 @@ urlpatterns = [
     path('missions/new/', views.MissionCreateView.as_view(), name='mission_create'),
     path('missions/<int:pk>/edit/', views.MissionUpdateView.as_view(), name='mission_update'),
     path('missions/<int:pk>/delete/', views.MissionDeleteView.as_view(), name='mission_delete'),
+
+    path('facturation-slr/', views.facturation_slr_view, name='facturation_slr'),
 ] 

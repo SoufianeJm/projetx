@@ -1,0 +1,38 @@
+{% extends "billing/base.html" %}
+
+{% block title %}{{ page_title|default:"Facturation SLR" }}{% endblock %}
+{% block page_title %}{{ page_title|default:"Facturation SLR" }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Upload Files</h5>
+                    <p class="card-text">Upload the required Excel files to generate the SLR facturation report.</p>
+                    
+                    <form method="post" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        {{ form.as_p }}
+                        <button type="submit" class="btn btn-primary mt-3">
+                            <i class="fas fa-file-excel me-2"></i>Generate and Download Report
+                        </button>
+                    </form>
+
+                    {% if messages %}
+                    <div class="mt-4">
+                        {% for message in messages %}
+                        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 
