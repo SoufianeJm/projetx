@@ -130,6 +130,15 @@ def mission_delete(request, pk):
     return render(request, 'billing/mission_confirm_delete.html', {'mission': mission})
 
 @login_required
+def mission_calculation_tracking_view(request):
+    missions = Mission.objects.all().order_by('belgian_name')
+    context = {
+        'missions': missions,
+        'page_title': 'Suivi Calculs Missions'
+    }
+    return render(request, 'billing/mission_calculation_tracking.html', context)
+
+@login_required
 def facturation_slr(request):
     processing_logs = []
     form = SLRFileUploadForm()
@@ -274,6 +283,34 @@ def facturation_slr(request):
                 global_summary_df[['Total Heures', 'Total', 'Total DES']] = global_summary_df[['Total Heures', 'Total', 'Total DES']].fillna(0)
                 global_summary_df['Estimees'] = pd.to_numeric(global_summary_df['Estimees'].astype(str).str.strip().replace(['', '-', 'nan', 'None'], '0'), errors='coerce').fillna(0)
                 processing_logs.append(f"DEBUG: global_summary_df created with {len(global_summary_df)} rows.")
+
+                # Update Mission records with calculation results
+                processing_logs.append("INFO: Attempting to update Mission records with calculated 'Total Heures' and 'Estimée'...")
+                if not global_summary_df.empty:
+                    updated_missions_count = 0
+                    period_for_calculation = f"{parsed_mois_nom} {parsed_annee_full}"
+
+                    for index, row in global_summary_df.iterrows():
+                        mission_label = row.get('Libelle projet')
+                        total_heures_calc = row.get('Total Heures')
+                        estimee_calc = row.get('Estimees')
+
+                        if mission_label is not None:
+                            try:
+                                mission_obj = Mission.objects.filter(belgian_name=mission_label).first()
+                                if mission_obj:
+                                    mission_obj.calculated_total_heures = total_heures_calc if pd.notna(total_heures_calc) else None
+                                    mission_obj.calculated_estimee = estimee_calc if pd.notna(estimee_calc) else None
+                                    mission_obj.calculation_period = period_for_calculation
+                                    mission_obj.save(update_fields=['calculated_total_heures', 'calculated_estimee', 'calculation_period'])
+                                    updated_missions_count += 1
+                                else:
+                                    processing_logs.append(f"WARNING: Mission with Libelle projet '{mission_label}' not found in DB for updating calculation results.")
+                            except Exception as e_update:
+                                processing_logs.append(f"ERROR: Could not update mission '{mission_label}' with calculation results: {str(e_update)}")
+                    processing_logs.append(f"INFO: Updated {updated_missions_count} Mission records with calculation results for period {period_for_calculation}.")
+                else:
+                    processing_logs.append("WARNING: global_summary_df is empty. Skipping update of Mission calculation fields.")
 
                 # --- adjusted_df ---
                 adjusted_df = pd.merge(

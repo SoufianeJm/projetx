@@ -99,12 +99,26 @@ class Mission(models.Model):
         null=False
     )
 
+    # New fields for storing calculation results
+    calculated_total_heures = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True, verbose_name="Total Heures Calculées"
+    )
+    calculated_estimee = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True, verbose_name="Estimée Calculée"
+    )
+    calculation_period = models.CharField(
+        max_length=50, null=True, blank=True, verbose_name="Période de Calcul"
+    )
+
     def __str__(self):
         # The field 'belgian_name' now holds the primary project label data.
         # The field 'libelle_de_projet' now holds the secondary/belgian name data.
         primary_label = self.belgian_name # This field now holds "Libellé de Projet" data
         secondary_label = self.libelle_de_projet # This field now holds "Belgian Name" data
-        return f"{self.otp_l2} - {primary_label or secondary_label} ({self.get_code_type_display()})"
+        base_str = f"{self.otp_l2} - {primary_label or secondary_label} ({self.get_code_type_display()})"
+        if self.calculation_period:
+            base_str += f" [Calculated: {self.calculation_period}]"
+        return base_str
 
     def get_absolute_url(self):
         return reverse('mission_detail', kwargs={'pk': self.pk})

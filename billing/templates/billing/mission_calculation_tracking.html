@@ -1,0 +1,79 @@
+{% extends "billing/base.html" %}
+
+{% block title %}{{ page_title }} - Dashboard{% endblock %}
+{% block page_title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="table-wrapper">
+    <h2>{{ page_title }}</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>OTP L2</th>
+                <th>Libellé de Projet</th>
+                <th>Belgian Name</th>
+                <th>Type de Code</th>
+                <th>Total Heures Calculées</th>
+                <th>Estimée (Période)</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for mission in missions %}
+            <tr>
+                <td>{{ mission.otp_l2 }}</td>
+                <td>{{ mission.belgian_name|default:"N/A" }}</td>
+                <td>{{ mission.libelle_de_projet|default:"N/A" }}</td>
+                <td>{{ mission.get_code_type_display|default:"N/A" }}</td>
+                <td>{{ mission.calculated_total_heures|default:"N/A" }}</td>
+                <td>
+                    {% if mission.calculated_estimee is not None %}
+                        {{ mission.calculated_estimee }}
+                        {% if mission.calculation_period %}
+                            ({{ mission.calculation_period }})
+                        {% endif %}
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="6">No missions found or no calculations performed yet.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<style>
+    .table-wrapper {
+        margin: 20px;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+    }
+
+    th, td {
+        padding: 12px;
+        text-align: left;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    th {
+        background-color: var(--primary-color);
+        color: white;
+        font-weight: bold;
+    }
+
+    tr:hover {
+        background-color: var(--hover-color);
+    }
+
+    td {
+        vertical-align: middle;
+    }
+</style>
+{% endblock %} 

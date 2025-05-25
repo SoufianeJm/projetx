@@ -11,5 +11,6 @@ urlpatterns = [
     path('missions/create/', views.mission_create, name='mission_create'),
     path('missions/<int:pk>/update/', views.mission_update, name='mission_update'),
     path('missions/<int:pk>/delete/', views.mission_delete, name='mission_delete'),
-    path('facturation-slr/', views.facturation_slr, name='facturation_slr'),
+    path('missions/tracking/', views.mission_calculation_tracking_view, name='mission_calculation_tracking'),
+    path('facturation/slr/', views.facturation_slr, name='facturation_slr'),
 ] 
