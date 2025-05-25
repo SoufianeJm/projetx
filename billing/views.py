@@ -152,9 +152,8 @@ def facturation_slr(request):
         # If missions have not been selected yet, show the modal with only missions from the heures file
         if heures_ibm_file_obj and not selected_otp_l2_codes:
             try:
-                base_df = pd.read_excel(heures_ibm_file_obj, sheet_name='base', usecols="E,H,I,M,N")
-                base_df.columns = ['Code projet', 'Nom', 'Grade', 'Date', 'Heures']
-                unique_codes = base_df['Code projet'].dropna().unique().tolist()
+                base_df = pd.read_excel(heures_ibm_file_obj, sheet_name='base')
+                unique_codes = base_df['OTP L2'].dropna().unique().tolist()
                 missions = Mission.objects.filter(otp_l2__in=unique_codes)
                 context = {
                     'form': form,
