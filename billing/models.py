@@ -11,6 +11,7 @@ class Resource(models.Model):
     GRADE_FR_SMGR = 'FR_SMGR'
     GRADE_FR_SRS = 'FR_SRS'
     GRADE_FR_STF = 'FR_STF'
+    GRADE_FR_STG = 'FR_STG'
     GRADE_CHOICES = [
         (GRADE_FR_JSA, 'FR_Junior Staff / Analyst'),
         (GRADE_FR_MGR, 'FR_Manager'),
@@ -18,6 +19,7 @@ class Resource(models.Model):
         (GRADE_FR_SMGR, 'FR_Senior Manager'),
         (GRADE_FR_SRS, 'FR_Senior Staff'),
         (GRADE_FR_STF, 'FR_Staff'),
+        (GRADE_FR_STG, 'FR_Stagiaire / Alternants'),
     ]
 
     # Choices for 'grade_des'
