@@ -191,7 +191,8 @@ def facturation_slr(request):
             try:
                 # Process Heures IBM file
                 heures_ibm_file_obj.seek(0)
-                base_df = pd.read_excel(heures_ibm_file_obj, sheet_name='base')
+                base_df = pd.read_excel(heures_ibm_file_obj, sheet_name='base', usecols="E,H,I,M,N")
+                base_df.columns = ['Code projet', 'Nom', 'Grade', 'Date', 'Heures']
                 processing_logs.append(f"INFO: Heures IBM file parsed. base_df shape: {base_df.shape}")
                 
                 # Process MAFE report file EXACTLY like main.py
@@ -319,94 +320,126 @@ def facturation_slr(request):
                 
                 processing_logs.append(f"INFO: Final target_mission_libelles_for_adjustment: {target_mission_libelles_for_adjustment}")
 
-                # --- Begin Calculation Logic ---
-                # Merge Heures IBM and MAFE data on 'Customer Name'
-                merged_df = pd.merge(
-                    base_df,
-                    mafe_df,
-                    left_on=base_customer_col,
-                    right_on=mafe_customer_col,
-                    how='left'
+                # --- MATCH main.py LOGIC ---
+                # 1. Prepare base_df (Heures IBM)
+                base_df = pd.read_excel(heures_ibm_file_obj, sheet_name='base', usecols="E,H,I,M,N")
+                base_df.columns = ['Code projet', 'Nom', 'Grade', 'Date', 'Heures']
+
+                # 2. Prepare codes_df from Mission model
+                codes_qs = Mission.objects.all().values('otp_l2', 'libelle_de_projet')
+                codes_df = pd.DataFrame(list(codes_qs))
+                codes_df = codes_df.rename(columns={'otp_l2': 'Code projet', 'libelle_de_projet': 'Libelle projet'})
+                codes_df['Libelle projet'] = codes_df['Libelle projet'].fillna('Code France')
+                base_df = base_df.merge(codes_df[['Code projet', 'Libelle projet']], on='Code projet', how='left')
+
+                # 3. Prepare consultants_df from Resource model
+                consultants_qs = Resource.objects.all().values('full_name', 'rate_ibm', 'rate_des', 'grade')
+                consultants_df = pd.DataFrame(list(consultants_qs))
+                consultants_df = consultants_df.rename(columns={'full_name': 'Nom', 'rate_ibm': 'Rate', 'rate_des': 'Rate DES', 'grade': 'Grade'})
+                base_df['Nom'] = base_df['Nom'].astype(str).str.lower().str.strip()
+                consultants_df['Nom'] = consultants_df['Nom'].astype(str).str.lower().str.strip()
+                base_df['Heures'] = pd.to_numeric(base_df['Heures'], errors='coerce').fillna(0)
+                consultants_df['Rate'] = pd.to_numeric(consultants_df['Rate'], errors='coerce').fillna(0)
+                consultants_df['Rate DES'] = pd.to_numeric(consultants_df['Rate DES'], errors='coerce').fillna(0)
+
+                # 4. Prepare MAFE file as in main.py
+                mafe_file_obj.seek(0)
+                mafe_raw = pd.read_excel(mafe_file_obj, sheet_name='(Tab A) FULLY COMMITTED', header=None)
+                mafe_raw.columns = mafe_raw.iloc[14].astype(str).str.strip().str.replace('\n', ' ').str.replace('\r', ' ')
+                mafe = mafe_raw.drop(index=list(range(0, 15))).reset_index(drop=True)
+
+                # 5. Find forecast column in MAFE
+                mois_mapping = {
+                    'Janvier': 'Jan', 'Février': 'Feb', 'Mars': 'Mar', 'Avril': 'Apr', 'Mai': 'May', 'Juin': 'Jun',
+                    'Juillet': 'Jul', 'Août': 'Aug', 'Septembre': 'Sep', 'Octobre': 'Oct', 'Novembre': 'Nov', 'Décembre': 'Dec',
+                    'Jan': 'Jan', 'Feb': 'Feb', 'Mar': 'Mar', 'Apr': 'Apr', 'May': 'May', 'Jun': 'Jun',
+                    'Jul': 'Jul', 'Aug': 'Aug', 'Sep': 'Sep', 'Oct': 'Oct', 'Nov': 'Nov', 'Dec': 'Dec'
+                }
+                match = re.search(r'(Janvier|Février|Mars|Avril|Mai|Juin|Juillet|Août|Septembre|Octobre|Novembre|Décembre|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[^\d]*(\d{2,4})', heures_ibm_file_obj.name)
+                mois = mois_mapping.get(match.group(1), match.group(1)) if match else ''
+                annee = match.group(2) if match else ''
+                forecast_col_cleaned = next((col for col in mafe.columns if mois in col and 'Forecasts' in col and annee[-2:] in col), None)
+                if forecast_col_cleaned:
+                    mafe_subset = mafe[['Country', 'Customer Name', forecast_col_cleaned]].rename(columns={forecast_col_cleaned: 'Estimees'})
+                    # No MAFE traitement model, so skip merge with Belgian Name
+                    mafe_subset['Libelle projet'] = mafe_subset['Customer Name']
+                else:
+                    mafe_subset = pd.DataFrame(columns=["Country", "Customer Name", "Libelle projet", "Estimees"])
+
+                # 6. Employee summary
+                employee_summary = (
+                    base_df.groupby(['Libelle projet', 'Nom', 'Grade'], as_index=False)
+                    .agg({'Heures': 'sum'})
+                    .rename(columns={'Heures': 'Total Heures'})
+                    .merge(consultants_df[['Nom', 'Rate', 'Rate DES']], on='Nom', how='left')
                 )
-                processing_logs.append(f"INFO: Merged DataFrames shape: {merged_df.shape}")
+                employee_summary['Total'] = employee_summary['Rate'] * employee_summary['Total Heures']
+                employee_summary['Total DES'] = employee_summary['Rate DES'] * employee_summary['Total Heures']
 
-                # Create adjusted DataFrame
-                adjusted_df = merged_df.copy()
-                
-                # Ensure required columns exist
-                required_cols = ['Libelle projet', 'Total Heures', 'Rate', 'Total_Projet_Cout', 'total_rate_proj', 'coeff_total', 'priority_coeff']
-                for col in required_cols:
-                    if col not in adjusted_df.columns:
-                        adjusted_df[col] = 1.0
-                
-                # Set Libelle projet column
-                adjusted_df['Libelle projet'] = adjusted_df['Libelle projet'] if 'Libelle projet' in adjusted_df.columns else adjusted_df[otp_col].astype(str)
+                summary_by_proj = employee_summary.groupby('Libelle projet', as_index=False).agg({'Total Heures': 'sum', 'Total': 'sum', 'Total DES': 'sum'})
+                global_summary = pd.merge(mafe_subset[['Libelle projet', 'Estimees']].drop_duplicates(), summary_by_proj, on='Libelle projet', how='left')
+                global_summary[['Total Heures', 'Total', 'Total DES']] = global_summary[['Total Heures', 'Total', 'Total DES']].fillna(0)
+                global_summary['Estimees'] = pd.to_numeric(global_summary['Estimees'].astype(str).str.strip().replace(['', '-', 'nan', 'None'], '0'), errors='coerce').fillna(0)
 
-                # Log shape before adjustment
-                processing_logs.append(f"INFO: adjusted_df shape before adjustment: {adjusted_df.shape}")
+                adjusted = employee_summary.merge(global_summary[['Libelle projet', 'Estimees']], on='Libelle projet', how='left')
+                adjusted['Total_Projet_Cout'] = adjusted.groupby('Libelle projet')['Total'].transform('sum')
+                adjusted['total_rate_proj'] = adjusted.groupby('Libelle projet')['Rate'].transform('sum')
+                adjusted = adjusted[(adjusted['Total_Projet_Cout'] > 0) & (adjusted['total_rate_proj'] > 0)]
+                adjusted['coeff_total'] = adjusted['Estimees'] / adjusted['Total_Projet_Cout']
+                adjusted['priority_coeff'] = adjusted['Rate'] / adjusted['total_rate_proj']
+                adjusted['final_coeff'] = adjusted['coeff_total'] * adjusted['priority_coeff']
+                adjusted['Adjusted Hours'] = (adjusted['Total Heures'] * (1 - adjusted['final_coeff'])).round()
+                adjusted['Adjusted Hours'] = adjusted['Adjusted Hours'].apply(lambda x: max(x, 0))
+                adjusted['Heures Retirées'] = adjusted['Total Heures'] - adjusted['Adjusted Hours']
+                adjusted['Adjusted Cost'] = adjusted['Adjusted Hours'] * adjusted['Rate']
+                adjusted['ID'] = adjusted['Nom'].astype(str) + ' - ' + adjusted['Libelle projet'].astype(str)
+                cols = ['ID'] + [col for col in adjusted.columns if col != 'ID']
+                adjusted = adjusted[cols]
 
-                # Conditional adjustment logic
-                adjusted_df['final_coeff'] = 0.0
-                adjustment_mask = adjusted_df['Libelle projet'].isin(target_mission_libelles_for_adjustment)
-                valid_mask = (adjusted_df['Total_Projet_Cout'] > 0) & (adjusted_df['total_rate_proj'] > 0)
-                full_mask = adjustment_mask & valid_mask
-                
-                adjusted_df.loc[full_mask, 'final_coeff'] = (
-                    adjusted_df.loc[full_mask, 'coeff_total'] * 
-                    adjusted_df.loc[full_mask, 'priority_coeff']
+                result = (
+                    adjusted.groupby('Libelle projet', as_index=False)
+                    .agg({'Total Heures': 'sum', 'Adjusted Hours': 'sum', 'Adjusted Cost': 'sum'})
+                    .merge(global_summary[['Libelle projet', 'Estimees']], on='Libelle projet', how='left')
                 )
+                result['Ecart'] = result['Estimees'] - result['Adjusted Cost']
 
-                # Calculate adjusted values
-                adjusted_df['Adjusted Hours'] = adjusted_df['Total Heures'] * adjusted_df['final_coeff']
-                adjusted_df['Adjusted Cost'] = adjusted_df['Total_Projet_Cout'] * adjusted_df['final_coeff']
-
-                # Log DataFrame sample after adjustment
-                sample_cols = ['Libelle projet', 'Total Heures', 'Rate', 'Total_Projet_Cout', 'total_rate_proj', 'coeff_total', 'priority_coeff', 'final_coeff', 'Adjusted Hours', 'Adjusted Cost']
-                sample_cols = [c for c in sample_cols if c in adjusted_df.columns]
-                processing_logs.append("<b>Sample of adjusted_df after final_coeff calculation:</b><div class='log-table-sample'>" + adjusted_df[sample_cols].head(8).to_html(index=False) + "</div>")
-
-                # Debug: log columns before groupby
-                processing_logs.append(f"base_df columns: {list(base_df.columns)}")
-                processing_logs.append(f"adjusted_df columns: {list(adjusted_df.columns)}")
+                for df in [employee_summary, global_summary, adjusted, result]:
+                    for col in df.select_dtypes(include='number').columns:
+                        df[col] = df[col].round(0)
 
                 # --- Excel Output Block ---
                 try:
                     output = BytesIO()
                     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                        # Write original data
-                        base_df.to_excel(writer, index=False, sheet_name='01_HeuresIBM_Base')
-                        mafe_df.to_excel(writer, index=False, sheet_name='01_MAFE_Report')
+                        workbook = writer.book
+                        header_format = workbook.add_format({'bold': True, 'bg_color': '#D9D2E9'})
+                        int_format = workbook.add_format({'num_format': '0'})
 
-                        # Create and write summaries (match main.py)
-                        # Employee summary
-                        employee_summary_df = adjusted_df.groupby(['Libelle projet', 'Nom', 'Grade'], as_index=False).agg({
-                            'Total Heures': 'sum',
-                            'Adjusted Hours': 'sum',
-                            'Total_Projet_Cout': 'sum',
-                            'Adjusted Cost': 'sum',
-                            'Rate': 'first',
-                            'priority_coeff': 'first',
-                        })
-                        # Global summary
-                        global_summary_df = adjusted_df.groupby('Libelle projet', as_index=False).agg({
-                            'Total Heures': 'sum',
-                            'Adjusted Hours': 'sum',
-                            'Total_Projet_Cout': 'sum',
-                            'Adjusted Cost': 'sum'
-                        })
+                        def write(df, sheet, selected_cols=None):
+                            if selected_cols:
+                                df = df[selected_cols]
+                            df.to_excel(writer, sheet_name=sheet, index=False, startrow=1, header=False)
+                            ws = writer.sheets[sheet]
+                            for i, col in enumerate(df.columns):
+                                ws.write(0, i, col, header_format)
+                                width = max(15, len(str(col)) + 2)
+                                ws.set_column(i, i, width, int_format if pd.api.types.is_integer_dtype(df[col]) else None)
+                            ws.add_table(0, 0, len(df), len(df.columns) - 1, {
+                                'name': f'Table_{sheet}',
+                                'style': 'TableStyleLight8',
+                                'columns': [{'header': c} for c in df.columns]
+                            })
 
-                        employee_summary_df.to_excel(writer, index=False, sheet_name='02_EmployeeSummary')
-                        global_summary_df.to_excel(writer, index=False, sheet_name='02_GlobalSummary')
-
-                        # Write adjusted and result data
-                        adjusted_df.to_excel(writer, index=False, sheet_name='03_Adjusted')
-                        result_df = adjusted_df[['Libelle projet', 'Total Heures', 'Adjusted Hours', 'Total_Projet_Cout', 'Adjusted Cost']]
-                        result_df.to_excel(writer, index=False, sheet_name='04_Result')
+                        write(base_df[['Date', 'Code projet', 'Nom', 'Grade', 'Heures', 'Libelle projet']], '00_Base')
+                        write(employee_summary, '01_Employee_Summary', ['Libelle projet', 'Nom', 'Grade', 'Total Heures', 'Rate', 'Rate DES', 'Total', 'Total DES'])
+                        write(global_summary, '02_Global_Summary', ['Libelle projet', 'Total Heures', 'Total', 'Total DES', 'Estimees'])
+                        write(adjusted, '03_Adjusted', ['ID', 'Libelle projet', 'Nom', 'Grade', 'Total Heures', 'Rate', 'Total', 'Adjusted Hours', 'Heures Retirées', 'Adjusted Cost'])
+                        write(result, '04_Result')
 
                     output.seek(0)
                     now_str = datetime.now().strftime('%Y%m%d_%H%M%S')
                     filename = f"SLR_Facturation_{now_str}.xlsx"
-                    processing_logs.append(f"INFO: Excel file generated with sheets: 01_HeuresIBM_Base, 01_MAFE_Report, 02_EmployeeSummary, 02_GlobalSummary, 03_Adjusted, 04_Result")
+                    processing_logs.append(f"INFO: Excel file generated with sheets: 00_Base, 01_Employee_Summary, 02_Global_Summary, 03_Adjusted, 04_Result")
 
                     response = HttpResponse(
                         output.getvalue(),
@@ -417,8 +450,6 @@ def facturation_slr(request):
                 except Exception as e:
                     processing_logs.append(f"ERROR: Failed to generate Excel file: {str(e)}<br><pre>{traceback.format_exc()}</pre>")
                     # Fall through to render logs
-
-                # --- End Excel Output Block ---
 
                 context = {
                     'form': form,
