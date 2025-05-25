@@ -219,6 +219,7 @@ def facturation_slr(request):
                 # Store DataFrames in session for later use
                 request.session['base_df'] = base_df.to_json()
                 request.session['mafe_df'] = mafe_df.to_json()
+                print("DEBUG: base_df and mafe_df stored in session")
 
                 context = {
                     'form': form,
@@ -240,6 +241,8 @@ def facturation_slr(request):
                 return render(request, 'billing/facturation_slr.html', context)
         else:
             # Second POST: do NOT require files, use DataFrames from session
+            print("DEBUG: base_df in session:", 'base_df' in request.session)
+            print("DEBUG: mafe_df in session:", 'mafe_df' in request.session)
             # 2. Modal submit: determine target missions for adjustment
             target_mission_libelles_for_adjustment = []
             try:
