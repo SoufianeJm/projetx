@@ -190,8 +190,8 @@ def facturation_slr(request):
                     processing_logs.append("ERROR: No missions found in the database.")
                     return render(request, 'billing/facturation_slr.html', {'form': form, 'page_title': 'Facturation SLR', 'processing_logs': processing_logs})
                 db_missions_df['Code projet'] = db_missions_df['otp_l2']
-                db_missions_df['Libelle projet'] = db_missions_df['belgian_name'].fillna('')
-                db_missions_df['Belgian Name'] = db_missions_df['libelle_de_projet']
+                db_missions_df['Libelle projet'] = db_missions_df['libelle_de_projet'].fillna('')
+                db_missions_df['Belgian Name'] = db_missions_df['belgian_name']
                 processing_logs.append(f"INFO: Mission data loaded. Sample:<div class='log-table-sample'>{db_missions_df.head(1).to_html(classes='table table-sm table-bordered table-striped my-2 log-table-sample-width', index=False, border=0)}</div>")
 
                 # --- Read Heures IBM file (base_df) ---
@@ -275,19 +275,33 @@ def facturation_slr(request):
                     global_summary_df[['Libelle projet', 'Estimees']],
                     on='Libelle projet', how='left'
                 )
+                # Calculate project totals first
                 adjusted_df['Total_Projet_Cout'] = adjusted_df.groupby('Libelle projet')['Total'].transform('sum')
                 adjusted_df['total_rate_proj'] = adjusted_df.groupby('Libelle projet')['Rate'].transform('sum')
+                
+                # Filter only rows where both totals are positive
                 adjusted_df = adjusted_df[(adjusted_df['Total_Projet_Cout'] > 0) & (adjusted_df['total_rate_proj'] > 0)]
+                
+                # Calculate coefficients exactly as in main.py
                 adjusted_df['coeff_total'] = adjusted_df['Estimees'] / adjusted_df['Total_Projet_Cout']
                 adjusted_df['priority_coeff'] = adjusted_df['Rate'] / adjusted_df['total_rate_proj']
                 adjusted_df['final_coeff'] = adjusted_df['coeff_total'] * adjusted_df['priority_coeff']
+                
+                # Calculate adjusted hours with proper rounding
                 adjusted_df['Adjusted Hours'] = (adjusted_df['Total Heures'] * (1 - adjusted_df['final_coeff'])).round()
                 adjusted_df['Adjusted Hours'] = adjusted_df['Adjusted Hours'].apply(lambda x: max(x, 0))
+                
+                # Calculate remaining fields
                 adjusted_df['Heures Retirées'] = adjusted_df['Total Heures'] - adjusted_df['Adjusted Hours']
                 adjusted_df['Adjusted Cost'] = adjusted_df['Adjusted Hours'] * adjusted_df['Rate']
                 adjusted_df['ID'] = adjusted_df['Nom'].astype(str) + ' - ' + adjusted_df['Libelle projet'].astype(str)
+                
+                # Reorder columns
                 cols = ['ID'] + [col for col in adjusted_df.columns if col != 'ID']
                 adjusted_df = adjusted_df[cols]
+                
+                # Add debug logging
+                processing_logs.append(f"DEBUG: adjusted_df sample with calculations:<div class='log-table-sample'>{adjusted_df[['Libelle projet', 'Total Heures', 'Estimees', 'Total_Projet_Cout', 'coeff_total', 'final_coeff', 'Adjusted Hours']].head(1).to_html(classes='table table-sm table-bordered table-striped my-2 log-table-sample-width', index=False, border=0)}</div>")
                 processing_logs.append(f"DEBUG: adjusted_df created with {len(adjusted_df)} rows.")
 
                 # --- result_df ---
