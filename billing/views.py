@@ -317,7 +317,26 @@ def facturation_slr(request):
                     header_format = workbook.add_format({'bold': True, 'bg_color': '#D9D2E9'})
                     int_format = workbook.add_format({'num_format': '0'})
 
+                    def handle_nan_values(df, sheet_name):
+                        """Handle NaN values in DataFrame before writing to Excel."""
+                        initial_nan_count = df.isna().sum().sum()
+                        if initial_nan_count > 0:
+                            processing_logs.append(f"DEBUG: Found {initial_nan_count} NaN values in {sheet_name} before fallback handling.")
+                            
+                            for col in df.columns:
+                                if pd.api.types.is_numeric_dtype(df[col]):
+                                    df[col] = df[col].fillna(0)
+                                else:
+                                    df[col] = df[col].fillna("N/A")
+                            
+                            final_nan_count = df.isna().sum().sum()
+                            processing_logs.append(f"INFO: Applied NaN fallbacks (0 for numeric, 'N/A' for string) to DataFrame for sheet '{sheet_name}'. NaN count reduced from {initial_nan_count} to {final_nan_count}.")
+                        return df
+
                     def write(df, sheet, selected_cols=None):
+                        # Handle NaN values before any other processing
+                        df = handle_nan_values(df, sheet)
+                        
                         # Final filtering check before writing to Excel
                         if 'Total Heures' in df.columns:
                             processing_logs.append(f"DEBUG: {sheet} before final filter: {len(df)} rows")
@@ -338,7 +357,7 @@ def facturation_slr(request):
                             'columns': [{'header': c} for c in df.columns]
                         })
 
-                    # Write each sheet with final filtering
+                    # Write each sheet with NaN handling and final filtering
                     write(base_df[['Date', 'Code projet', 'Nom', 'Grade from File', 'Heures', 'Libelle projet']], '00_Base')
                     write(employee_summary_df[['Libelle projet', 'Nom', 'Grade from File', 'Total Heures', 'Rate', 'Rate DES', 'Total', 'Total DES']], '01_Employee_Summary')
                     write(global_summary_df[['Libelle projet', 'Total Heures', 'Total', 'Total DES', 'Estimees']], '02_Global_Summary')
