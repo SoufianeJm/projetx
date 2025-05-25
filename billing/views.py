@@ -197,16 +197,23 @@ def facturation_slr(request):
                 # Process MAFE report file (mimic main.py logic)
                 mafe_file_obj.seek(0)
                 mafe_raw = pd.read_excel(mafe_file_obj, header=None)
-                # Log the first 20 rows for debugging
-                processing_logs.append('<b>First 20 rows of MAFE file:</b><br><pre>' + '\n'.join(str(list(mafe_raw.iloc[i].values)) for i in range(min(20, len(mafe_raw)))) + '</pre>')
+                # Log all rows that contain 'customer' in any cell
+                customer_rows = []
+                for i in range(len(mafe_raw)):
+                    row = mafe_raw.iloc[i].astype(str).str.lower().str.replace('\xa0', ' ').str.strip()
+                    if any('customer' in cell for cell in row):
+                        customer_rows.append(f'Row {i}: ' + str(list(mafe_raw.iloc[i].values)))
+                if customer_rows:
+                    processing_logs.append('<b>Rows with "customer" in any cell:</b><br><pre>' + '\n'.join(customer_rows) + '</pre>')
+
                 header_row_idx = None
                 for i in range(len(mafe_raw)):
-                    row = mafe_raw.iloc[i].astype(str).str.lower().str.strip()
-                    if any('customer name' in cell for cell in row):
+                    row = mafe_raw.iloc[i].astype(str).str.lower().str.replace('\xa0', ' ').str.strip()
+                    if any('customer' in cell for cell in row):
                         header_row_idx = i
                         break
                 if header_row_idx is None:
-                    raise ValueError("Could not find a header row with 'Customer Name' in the MAFE file")
+                    raise ValueError("Could not find a header row with 'customer' in the MAFE file")
                 mafe_raw.columns = mafe_raw.iloc[header_row_idx].astype(str).str.strip().str.replace('\n', ' ').str.replace('\r', ' ')
                 mafe_df = mafe_raw.drop(index=list(range(0, header_row_idx + 1))).reset_index(drop=True)
                 processing_logs.append(f"INFO: MAFE report file parsed. mafe_df shape: {mafe_df.shape}")
