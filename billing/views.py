@@ -140,6 +140,15 @@ def mission_calculation_tracking_view(request):
     }
     return render(request, 'billing/mission_calculation_tracking.html', context)
 
+def find_otp_l2_column(df):
+    # Normalize all column names: remove all whitespace (including non-breaking), lowercase
+    def normalize(col):
+        return re.sub(r'[\s\u00A0]+', '', str(col)).lower()
+    for col in df.columns:
+        if normalize(col) == 'otpl2':
+            return col
+    return None
+
 @login_required
 def facturation_slr(request):
     processing_logs = []
@@ -149,28 +158,30 @@ def facturation_slr(request):
         form = SLRFileUploadForm(request.POST, request.FILES)
         heures_ibm_file_obj = request.FILES.get('heures_ibm_file')
         mafe_file_obj = request.FILES.get('mafe_report_file')
-        selected_otp_l2_codes = request.POST.getlist('selected_otp_l2_codes')
+        selected_libelle_projet = request.POST.getlist('selected_libelle_projet')
 
         # If missions have not been selected yet, show the modal with only missions from the heures file
-        if heures_ibm_file_obj and not selected_otp_l2_codes:
+        if heures_ibm_file_obj and not selected_libelle_projet:
             try:
                 base_df = pd.read_excel(heures_ibm_file_obj, sheet_name='base')
-                unique_codes = base_df['OTP L2'].dropna().unique().tolist()
+                otp_col = find_otp_l2_column(base_df)
+                if not otp_col:
+                    processing_logs.append("ERROR: Could not find 'OTP L2' column in the Heures IBM file.")
+                    context = {
+                        'form': form,
+                        'missions': Mission.objects.none(),
+                        'show_modal': False,
+                        'processing_logs': processing_logs,
+                        'page_title': 'Facturation SLR',
+                    }
+                    return render(request, 'billing/facturation_slr.html', context)
+                unique_codes = base_df[otp_col].dropna().unique().tolist()
                 missions = Mission.objects.filter(otp_l2__in=unique_codes)
-                # Pass all missions as JSON for frontend filtering
-                all_missions = Mission.objects.all()
-                missions_json = json.dumps([
-                    {
-                        'otp_l2': m.otp_l2,
-                        'belgian_name': m.belgian_name,
-                        'libelle_de_projet': m.libelle_de_projet,
-                        'code_type_display': m.get_code_type_display(),
-                    } for m in all_missions
-                ], cls=DjangoJSONEncoder)
+                # Only unique Libellé de Projet
+                unique_libelles = sorted(set(m.libelle_de_projet for m in missions if m.libelle_de_projet))
                 context = {
                     'form': form,
-                    'missions': missions,
-                    'missions_json': missions_json,
+                    'missions': unique_libelles,
                     'show_modal': True,
                     'processing_logs': processing_logs,
                     'page_title': 'Facturation SLR',
@@ -181,7 +192,6 @@ def facturation_slr(request):
                 context = {
                     'form': form,
                     'missions': Mission.objects.none(),
-                    'missions_json': '[]',
                     'show_modal': False,
                     'processing_logs': processing_logs,
                     'page_title': 'Facturation SLR',
@@ -237,8 +247,8 @@ def facturation_slr(request):
                 processing_logs.append(f"INFO: Mission data loaded. Sample:<div class='log-table-sample'>{db_missions_df.head(1).to_html(classes='table table-sm table-bordered table-striped my-2 log-table-sample-width', index=False, border=0)}</div>")
 
                 # --- Get Selected Missions ---
-                if selected_otp_l2_codes:
-                    selected_missions_details_df = db_missions_df[db_missions_df['Code projet'].isin(selected_otp_l2_codes)]
+                if selected_libelle_projet:
+                    selected_missions_details_df = db_missions_df[db_missions_df['Code projet'].isin(selected_libelle_projet)]
                     selected_libelles = selected_missions_details_df['Libelle projet'].unique().tolist()
                     processing_logs.append(f"INFO: Missions selected for adjustment (Libelles): {selected_libelles}")
                 else:
@@ -444,22 +454,12 @@ def facturation_slr(request):
                 for error in errors:
                     processing_logs.append(f"ERROR (Form field: {field}): {error}")
 
-    # For GET request, show all missions as JSON for JS filtering
-    all_missions = Mission.objects.all()
-    missions_json = json.dumps([
-        {
-            'otp_l2': m.otp_l2,
-            'belgian_name': m.belgian_name,
-            'libelle_de_projet': m.libelle_de_projet,
-            'code_type_display': m.get_code_type_display(),
-        } for m in all_missions
-    ], cls=DjangoJSONEncoder)
+    # For GET request, show no missions
     context = {
         'form': form,
         'page_title': 'Facturation SLR',
         'processing_logs': processing_logs,
-        'missions': Mission.objects.none(),
-        'missions_json': missions_json,
+        'missions': [],
         'show_modal': False,
     }
     return render(request, 'billing/facturation_slr.html', context)

@@ -9,22 +9,8 @@
     <div class="facturation-card">
         <form method="post" enctype="multipart/form-data" id="slrUploadForm">
             {% csrf_token %}
-            <div class="custom-file-group">
-                <label for="id_mafe_report_file" class="custom-label">DTT IMT France MAFE Report (xlsx)</label>
-                <div class="custom-file-input-wrapper">
-                    <input type="file" name="mafe_report_file" id="id_mafe_report_file" accept=".xlsx" class="custom-file-input" onchange="handleFileChange(this, 'mafe')">
-                    <div class="file-preview" id="mafe-preview" style="display:none;"></div>
-                </div>
-            </div>
-            <div class="custom-file-group">
-                <label for="id_heures_ibm_file" class="custom-label">Heures IBM (xlsx)</label>
-                <div class="custom-file-input-wrapper">
-                    <input type="file" name="heures_ibm_file" id="id_heures_ibm_file" accept=".xlsx" class="custom-file-input" onchange="handleFileChange(this, 'heures')">
-                    <div class="file-preview" id="heures-preview" style="display:none;"></div>
-                </div>
-            </div>
-            <div class="accepted-types">Accepted files: <b>XLSX</b></div>
-            <button type="button" class="btn btn-primary mt-3" id="generateReportBtn">
+            {{ form|crispy }}
+            <button type="submit" class="btn btn-primary mt-3" id="generateReportBtn">
                 <i class="fas fa-file-excel me-2"></i>Generate and Download Report
             </button>
         </form>
@@ -46,7 +32,7 @@
 </div>
 
 <!-- Pure CSS/JS Modal for Mission Selection -->
-<div id="missionSelectModal" class="custom-modal">
+<div id="missionSelectModal" class="custom-modal" {% if show_modal %}style="display:flex;"{% endif %}>
   <div class="custom-modal-content">
     <span class="custom-modal-close" id="closeMissionModal">&times;</span>
     <h3>Select Missions for Adjustment</h3>
@@ -60,7 +46,14 @@
           </tr>
         </thead>
         <tbody>
-          <!-- Will be populated by JS -->
+          {% for libelle in missions %}
+          <tr>
+            <td><input type="checkbox" class="mission-checkbox" name="selected_libelle_projet" value="{{ libelle }}"></td>
+            <td>{{ libelle }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="2">No missions found in the Heures IBM file.</td></tr>
+          {% endfor %}
         </tbody>
       </table>
     </div>
@@ -230,41 +223,7 @@
 </style>
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
-<!-- SheetJS for reading Excel files in browser -->
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
-function handleFileChange(input, type) {
-    const preview = document.getElementById(type + '-preview');
-    if (input.files && input.files[0]) {
-        const file = input.files[0];
-        const size = (file.size / 1024).toFixed(2) + ' KB';
-        preview.innerHTML = `<span class='file-icon'><i class='fas fa-file-excel'></i></span> ${file.name} <span style='color:#888;font-size:0.95em;'>${size}</span> <button type='button' class='file-remove' onclick='removeFile("${input.id}", "${type}-preview")'><i class='fas fa-times'></i></button>`;
-        preview.style.display = 'flex';
-    } else {
-        preview.innerHTML = '';
-        preview.style.display = 'none';
-    }
-}
-
-function removeFile(inputId, previewId) {
-    const input = document.getElementById(inputId);
-    input.value = '';
-    const preview = document.getElementById(previewId);
-    preview.innerHTML = '';
-    preview.style.display = 'none';
-}
-
-// Custom file input click
-Array.from(document.getElementsByClassName('custom-file-input-wrapper')).forEach(function(wrapper) {
-    wrapper.addEventListener('click', function(e) {
-        if (e.target.className.indexOf('file-remove') === -1) {
-            const input = wrapper.querySelector('input[type="file"]');
-            input.click();
-        }
-    });
-});
-
-// Mission Selection Modal Handling
 document.addEventListener('DOMContentLoaded', function() {
     const generateReportBtn = document.getElementById('generateReportBtn');
     const slrUploadForm = document.getElementById('slrUploadForm');
@@ -272,84 +231,14 @@ document.addEventListener('DOMContentLoaded', function() {
     const closeModalX = document.getElementById('closeMissionModal');
     const closeModalBtn = document.getElementById('closeMissionModalBtn');
     const proceedBtn = document.getElementById('proceedWithCalculationsBtn');
-    const missionTableBody = document.querySelector('#mission-select-table tbody');
-    // All missions from backend for JS filtering
-    const allMissions = JSON.parse('{{ missions_json|escapejs }}');
 
-    // Show modal with filtered missions
-    function showMissionModal(filteredOtps) {
-        // Filter missions to only those in filteredOtps
-        const filteredMissions = allMissions.filter(m => filteredOtps.includes(m.otp_l2));
-        // Get unique Libellé de Projet values
-        const uniqueLibelles = Array.from(new Set(filteredMissions.map(m => m.libelle_de_projet)));
-        // Populate table
-        missionTableBody.innerHTML = '';
-        if (uniqueLibelles.length === 0) {
-            missionTableBody.innerHTML = '<tr><td colspan="2">No missions found in the Heures IBM file.</td></tr>';
-        } else {
-            uniqueLibelles.forEach(libelle => {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                  <td><input type="checkbox" class="mission-checkbox" value="${libelle}"></td>
-                  <td>${libelle}</td>
-                `;
-                missionTableBody.appendChild(row);
-            });
-        }
-        modal.style.display = 'flex';
-    }
-
-    // Read OTP L2 codes from the selected Heures IBM file using SheetJS
-    function extractOtpsFromHeuresFile(file, callback) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            const data = new Uint8Array(e.target.result);
-            const workbook = XLSX.read(data, {type: 'array'});
-            const sheet = workbook.Sheets[workbook.SheetNames[0]];
-            // Get all rows as arrays
-            const allRows = XLSX.utils.sheet_to_json(sheet, {header: 1, defval: '', raw: false});
-            // Find the header row index by looking for a cell that matches 'OTP L2'
-            function normalizeColName(col) {
-                return col.replace(/[\s\u00A0]+/g, '').toLowerCase();
-            }
-            let headerRowIndex = -1;
-            for (let i = 0; i < allRows.length; i++) {
-                if (allRows[i].some(cell => normalizeColName(cell) === 'otpl2')) {
-                    headerRowIndex = i;
-                    break;
-                }
-            }
-            if (headerRowIndex === -1) {
-                alert('Could not find "OTP L2" column in the Heures IBM file.');
-                return callback([]);
-            }
-            // Now parse the sheet using the correct header row
-            const json = XLSX.utils.sheet_to_json(sheet, {defval: '', raw: false, range: headerRowIndex});
-            // Find the normalized OTP L2 column name
-            const otpCol = Object.keys(json[0] || {}).find(col => normalizeColName(col) === 'otpl2');
-            if (!otpCol) {
-                alert('Could not find "OTP L2" column in the Heures IBM file (after header row detection).');
-                return callback([]);
-            }
-            const otps = Array.from(new Set(json.map(row => row[otpCol]).filter(Boolean)));
-            callback(otps);
-        };
-        reader.readAsArrayBuffer(file);
-    }
-
-    // Show modal after reading file and extracting OTPs
+    // Open modal on button click (for GET or after cancel)
     generateReportBtn.addEventListener('click', function(event) {
-        event.preventDefault();
-        const mafeFile = slrUploadForm.querySelector('input[name="mafe_report_file"]').files.length;
-        const heuresInput = slrUploadForm.querySelector('input[name="heures_ibm_file"]');
-        const heuresFile = heuresInput.files[0];
-        if (!mafeFile || !heuresFile) {
-            alert('Please select both MAFE report and Heures IBM files.');
-            return;
+        // Only open modal if there are missions to show
+        if (document.querySelectorAll('.mission-checkbox').length > 0) {
+            event.preventDefault();
+            modal.style.display = 'flex';
         }
-        extractOtpsFromHeuresFile(heuresFile, function(filteredOtps) {
-            showMissionModal(filteredOtps);
-        });
     });
 
     // Hide modal
@@ -362,16 +251,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Proceed and submit
     proceedBtn.addEventListener('click', function() {
-        // Remove any existing hidden inputs
-        slrUploadForm.querySelectorAll('input[type="hidden"][name="selected_otp_l2_codes"]').forEach(input => input.remove());
-        // Add hidden inputs for selected libelles
-        document.querySelectorAll('.mission-checkbox:checked').forEach(checkbox => {
-            const hiddenInput = document.createElement('input');
-            hiddenInput.type = 'hidden';
-            hiddenInput.name = 'selected_libelle_projet';
-            hiddenInput.value = checkbox.value;
-            slrUploadForm.appendChild(hiddenInput);
-        });
         closeModal();
         slrUploadForm.submit();
     });
