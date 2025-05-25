@@ -9,10 +9,7 @@
         <h2>{{ page_title }}</h2>
         <div class="table-actions">
             <a href="{% url 'mission_create' %}" class="btn-add-new">Add New Mission</a>
-            <form method="post" action="{% url 'mission_bulk_delete' %}" class="bulk-delete-form" id="bulkDeleteForm">
-                {% csrf_token %}
-                <button type="submit" class="btn-delete" id="bulkDeleteBtn" disabled>Delete Selected</button>
-            </form>
+            <button type="submit" form="missionForm" class="btn-delete" id="bulkDeleteBtn" disabled>Delete Selected</button>
         </div>
     </div>
 
@@ -28,7 +25,7 @@
         <table>
             <thead>
                 <tr>
-                    <th>
+                    <th style="width: 40px;">
                         <input type="checkbox" id="selectAll" class="select-all-checkbox">
                     </th>
                     <th>OTP L2</th>
@@ -78,10 +75,6 @@
     .table-actions {
         display: flex;
         gap: 10px;
-    }
-
-    .bulk-delete-form {
-        display: inline;
     }
 
     .search-box {
@@ -173,6 +166,15 @@
     .select-all-checkbox, .mission-checkbox {
         width: 18px;
         height: 18px;
+        cursor: pointer;
+    }
+
+    #bulkDeleteBtn {
+        background-color: var(--accent-color);
+        color: white;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 5px;
         cursor: pointer;
     }
 
