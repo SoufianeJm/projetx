@@ -372,25 +372,28 @@ def facturation_slr(request):
                         # Write original data
                         base_df.to_excel(writer, index=False, sheet_name='01_HeuresIBM_Base')
                         mafe_df.to_excel(writer, index=False, sheet_name='01_MAFE_Report')
-                        
-                        # Create and write summaries
-                        employee_summary_df = adjusted_df.groupby('Employee').agg({
+
+                        # Create and write summaries (match main.py)
+                        # Employee summary
+                        employee_summary_df = adjusted_df.groupby(['Libelle projet', 'Nom', 'Grade'], as_index=False).agg({
+                            'Total Heures': 'sum',
+                            'Adjusted Hours': 'sum',
+                            'Total_Projet_Cout': 'sum',
+                            'Adjusted Cost': 'sum',
+                            'Rate': 'first',
+                            'priority_coeff': 'first',
+                        })
+                        # Global summary
+                        global_summary_df = adjusted_df.groupby('Libelle projet', as_index=False).agg({
                             'Total Heures': 'sum',
                             'Adjusted Hours': 'sum',
                             'Total_Projet_Cout': 'sum',
                             'Adjusted Cost': 'sum'
-                        }).reset_index()
-                        
-                        global_summary_df = adjusted_df.groupby('Libelle projet').agg({
-                            'Total Heures': 'sum',
-                            'Adjusted Hours': 'sum',
-                            'Total_Projet_Cout': 'sum',
-                            'Adjusted Cost': 'sum'
-                        }).reset_index()
-                        
+                        })
+
                         employee_summary_df.to_excel(writer, index=False, sheet_name='02_EmployeeSummary')
                         global_summary_df.to_excel(writer, index=False, sheet_name='02_GlobalSummary')
-                        
+
                         # Write adjusted and result data
                         adjusted_df.to_excel(writer, index=False, sheet_name='03_Adjusted')
                         result_df = adjusted_df[['Libelle projet', 'Total Heures', 'Adjusted Hours', 'Total_Projet_Cout', 'Adjusted Cost']]
@@ -400,7 +403,7 @@ def facturation_slr(request):
                     now_str = datetime.now().strftime('%Y%m%d_%H%M%S')
                     filename = f"SLR_Facturation_{now_str}.xlsx"
                     processing_logs.append(f"INFO: Excel file generated with sheets: 01_HeuresIBM_Base, 01_MAFE_Report, 02_EmployeeSummary, 02_GlobalSummary, 03_Adjusted, 04_Result")
-                    
+
                     response = HttpResponse(
                         output.getvalue(),
                         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
