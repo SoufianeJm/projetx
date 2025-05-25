@@ -254,8 +254,10 @@ def facturation_slr(request):
 
                 # --- Process mafe_subset_df ---
                 forecast_col_cleaned = next((col for col in df_mafe.columns if mois in col and 'Forecasts' in col and annee[-2:] in col), None)
+                dynamic_estimees_col_name = f'Estimees {parsed_mois_nom}'  # e.g., 'Estimees May'
+                
                 if forecast_col_cleaned:
-                    mafe_subset_df = df_mafe[['Country', 'Customer Name', forecast_col_cleaned]].rename(columns={forecast_col_cleaned: 'Estimees'})
+                    mafe_subset_df = df_mafe[['Country', 'Customer Name', forecast_col_cleaned]].rename(columns={forecast_col_cleaned: dynamic_estimees_col_name})
                     # Map Customer Name to Libelle projet using missions
                     mafe_subset_df = mafe_subset_df.merge(
                         db_missions_df[['Belgian Name DB', 'Libelle Projet DB']],
@@ -264,7 +266,7 @@ def facturation_slr(request):
                     mafe_subset_df['Libelle projet'] = mafe_subset_df['Libelle Projet DB']
                     mafe_subset_df['Libelle projet'] = mafe_subset_df['Libelle projet'].fillna(mafe_subset_df['Customer Name'])
                 else:
-                    mafe_subset_df = pd.DataFrame(columns=["Country", "Customer Name", "Libelle projet", "Estimees"])
+                    mafe_subset_df = pd.DataFrame(columns=["Country", "Customer Name", "Libelle projet", dynamic_estimees_col_name])
                 processing_logs.append(f"INFO: MAFE subset processed. Sample:<div class='log-table-sample'>{mafe_subset_df.head(1).to_html(classes='table table-sm table-bordered table-striped my-2 log-table-sample-width', index=False, border=0)}</div>")
 
                 # --- summary_by_proj_df ---
@@ -276,52 +278,27 @@ def facturation_slr(request):
 
                 # --- global_summary_df ---
                 global_summary_df = pd.merge(
-                    mafe_subset_df[['Libelle projet', 'Estimees']].drop_duplicates(),
+                    mafe_subset_df[['Libelle projet', dynamic_estimees_col_name]].drop_duplicates(),
                     summary_by_proj_df,
                     on='Libelle projet', how='left'
                 )
                 global_summary_df[['Total Heures', 'Total', 'Total DES']] = global_summary_df[['Total Heures', 'Total', 'Total DES']].fillna(0)
-                global_summary_df['Estimees'] = pd.to_numeric(global_summary_df['Estimees'].astype(str).str.strip().replace(['', '-', 'nan', 'None'], '0'), errors='coerce').fillna(0)
+                global_summary_df[dynamic_estimees_col_name] = pd.to_numeric(
+                    global_summary_df[dynamic_estimees_col_name].astype(str).str.strip().replace(['', '-', 'nan', 'None'], '0'),
+                    errors='coerce'
+                ).fillna(0)
                 processing_logs.append(f"DEBUG: global_summary_df created with {len(global_summary_df)} rows.")
-
-                # Update Mission records with calculation results
-                processing_logs.append("INFO: Attempting to update Mission records with calculated 'Total Heures' and 'Estimée'...")
-                if not global_summary_df.empty:
-                    updated_missions_count = 0
-                    period_for_calculation = f"{parsed_mois_nom} {parsed_annee_full}"
-
-                    for index, row in global_summary_df.iterrows():
-                        mission_label = row.get('Libelle projet')
-                        total_heures_calc = row.get('Total Heures')
-                        estimee_calc = row.get('Estimees')
-
-                        if mission_label is not None:
-                            try:
-                                mission_obj = Mission.objects.filter(belgian_name=mission_label).first()
-                                if mission_obj:
-                                    mission_obj.calculated_total_heures = total_heures_calc if pd.notna(total_heures_calc) else None
-                                    mission_obj.calculated_estimee = estimee_calc if pd.notna(estimee_calc) else None
-                                    mission_obj.calculation_period = period_for_calculation
-                                    mission_obj.save(update_fields=['calculated_total_heures', 'calculated_estimee', 'calculation_period'])
-                                    updated_missions_count += 1
-                                else:
-                                    processing_logs.append(f"WARNING: Mission with Libelle projet '{mission_label}' not found in DB for updating calculation results.")
-                            except Exception as e_update:
-                                processing_logs.append(f"ERROR: Could not update mission '{mission_label}' with calculation results: {str(e_update)}")
-                    processing_logs.append(f"INFO: Updated {updated_missions_count} Mission records with calculation results for period {period_for_calculation}.")
-                else:
-                    processing_logs.append("WARNING: global_summary_df is empty. Skipping update of Mission calculation fields.")
 
                 # --- adjusted_df ---
                 adjusted_df = pd.merge(
                     employee_summary_df,
-                    global_summary_df[['Libelle projet', 'Estimees']],
+                    global_summary_df[['Libelle projet', dynamic_estimees_col_name]],
                     on='Libelle projet', how='left'
                 )
                 adjusted_df['Total_Projet_Cout'] = adjusted_df.groupby('Libelle projet')['Total'].transform('sum')
                 adjusted_df['total_rate_proj'] = adjusted_df.groupby('Libelle projet')['Rate'].transform('sum')
                 adjusted_df = adjusted_df[(adjusted_df['Total_Projet_Cout'] > 0) & (adjusted_df['total_rate_proj'] > 0)]
-                adjusted_df['coeff_total'] = adjusted_df['Estimees'] / adjusted_df['Total_Projet_Cout']
+                adjusted_df['coeff_total'] = adjusted_df[dynamic_estimees_col_name] / adjusted_df['Total_Projet_Cout']
                 adjusted_df['priority_coeff'] = adjusted_df['Rate'] / adjusted_df['total_rate_proj']
                 adjusted_df['final_coeff'] = adjusted_df['coeff_total'] * adjusted_df['priority_coeff']
                 adjusted_df['Adjusted Hours'] = (adjusted_df['Total Heures'] * (1 - adjusted_df['final_coeff'])).round()
@@ -337,9 +314,9 @@ def facturation_slr(request):
                 result_df = (
                     adjusted_df.groupby('Libelle projet', as_index=False)
                     .agg({'Total Heures': 'sum', 'Adjusted Hours': 'sum', 'Adjusted Cost': 'sum'})
-                    .merge(global_summary_df[['Libelle projet', 'Estimees']], on='Libelle projet', how='left')
+                    .merge(global_summary_df[['Libelle projet', dynamic_estimees_col_name]], on='Libelle projet', how='left')
                 )
-                result_df['Ecart'] = result_df['Estimees'] - result_df['Adjusted Cost']
+                result_df['Ecart'] = result_df[dynamic_estimees_col_name] - result_df['Adjusted Cost']
                 processing_logs.append(f"DEBUG: result_df created with {len(result_df)} rows.")
 
                 # --- Rounding ---
@@ -397,7 +374,7 @@ def facturation_slr(request):
                     # Write each sheet with NaN handling and final filtering
                     write(base_df[['Date', 'Code projet', 'Nom', 'Grade from File', 'Heures', 'Libelle projet']], '00_Base')
                     write(employee_summary_df[['Libelle projet', 'Nom', 'Grade from File', 'Total Heures', 'Rate', 'Rate DES', 'Total', 'Total DES']], '01_Employee_Summary')
-                    write(global_summary_df[['Libelle projet', 'Total Heures', 'Total', 'Total DES', 'Estimees']], '02_Global_Summary')
+                    write(global_summary_df[['Libelle projet', 'Total Heures', 'Total', 'Total DES', dynamic_estimees_col_name]], '02_Global_Summary')
                     write(adjusted_df[['ID', 'Libelle projet', 'Nom', 'Grade from File', 'Total Heures', 'Rate', 'Total', 'Adjusted Hours', 'Heures Retirées', 'Adjusted Cost']], '03_Adjusted')
                     write(result_df, '04_Result')
 
