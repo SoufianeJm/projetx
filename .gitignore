@@ -4,10 +4,21 @@ __pycache__/
 *$py.class
 *.so
 .Python
-venv/
-ENV/
-env/
-.env
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
 # Django
 *.log
@@ -15,6 +26,27 @@ local_settings.py
 db.sqlite3
 db.sqlite3-journal
 media/
+
+# Excel files
+*.xlsx
+*.xls
+*.xlsm
+*.xlsb
+*.xltx
+*.xltm
+*.xlt
+*.xla
+*.xlam
+*.xlw
+
+# Environment
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
 
 # IDE
 .idea/
