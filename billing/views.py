@@ -194,7 +194,6 @@ def facturation_slr(request):
                 base_df = pd.read_excel(heures_ibm_file_obj, sheet_name='base', usecols="E,H,I,M,N")
                 base_df.columns = ['Code projet', 'Nom', 'Grade', 'Date', 'Heures']
                 processing_logs.append(f"INFO: Heures IBM file parsed. base_df shape: {base_df.shape}")
-                
                 # Process MAFE report file EXACTLY like main.py
                 mafe_file_obj.seek(0)
                 mafe_raw = pd.read_excel(mafe_file_obj, sheet_name='(Tab A) FULLY COMMITTED', header=None)
@@ -202,36 +201,9 @@ def facturation_slr(request):
                 mafe_df = mafe_raw.drop(index=list(range(0, 15))).reset_index(drop=True)
                 processing_logs.append(f"INFO: MAFE report file parsed. mafe_df shape: {mafe_df.shape}")
 
-                # Get OTP L2 column in base_df
-                otp_col = find_otp_l2_column(base_df)
-                if not otp_col:
-                    raise ValueError("Could not find 'OTP L2' column in the Heures IBM file")
-
-                # Find the 'Customer Name' column in mafe_df
-                processing_logs.append(f"mafe_df columns: {list(mafe_df.columns)}")
-                def normalize(col):
-                    return re.sub(r'[\s\u00A0_]+', '', str(col)).lower()
-                mafe_customer_col = None
-                for col in mafe_df.columns:
-                    if normalize(col) == 'customername':
-                        mafe_customer_col = col
-                        break
-                if not mafe_customer_col:
-                    raise ValueError("Could not find 'Customer Name' column in the MAFE file")
-                processing_logs.append(f"INFO: Using '{otp_col}' from base_df and '{mafe_customer_col}' from mafe_df for merge.")
-
-                # Find the corresponding column in base_df (try 'Customer Name' or fallback to otp_col)
-                base_customer_col = None
-                for col in base_df.columns:
-                    if normalize(col) == 'customername':
-                        base_customer_col = col
-                        break
-                if not base_customer_col:
-                    base_customer_col = otp_col  # fallback
-
-                # Get unique codes and get missions
-                unique_codes = base_df[otp_col].dropna().unique().tolist()
-                processing_logs.append(f"INFO: Unique OTP L2 codes extracted: {unique_codes}")
+                # Get unique codes and get missions (use 'Code projet')
+                unique_codes = base_df['Code projet'].dropna().unique().tolist()
+                processing_logs.append(f"INFO: Unique Code projet values extracted: {unique_codes}")
                 missions_from_heures_file = Mission.objects.filter(otp_l2__in=unique_codes)
                 unique_libelles = sorted(set(m.libelle_de_projet for m in missions_from_heures_file if m.libelle_de_projet))
                 processing_logs.append(f"INFO: Candidate missions for adjustment (libelle_de_projet): {unique_libelles}")
@@ -269,55 +241,24 @@ def facturation_slr(request):
                 # Retrieve DataFrames from session
                 base_df = pd.read_json(request.session.get('base_df', '{}'))
                 mafe_df = pd.read_json(request.session.get('mafe_df', '{}'))
-                
                 if base_df.empty or mafe_df.empty:
                     raise ValueError("Session data for DataFrames is missing or invalid")
-
                 processing_logs.append(f"INFO: Retrieved DataFrames from session. base_df shape: {base_df.shape}, mafe_df shape: {mafe_df.shape}")
 
-                # Get OTP L2 column in base_df
-                otp_col = find_otp_l2_column(base_df)
-                if not otp_col:
-                    raise ValueError("Could not find 'OTP L2' column in the Heures IBM file")
-
-                # Find the 'Customer Name' column in mafe_df
-                processing_logs.append(f"mafe_df columns: {list(mafe_df.columns)}")
-                def normalize(col):
-                    return re.sub(r'[\s\u00A0_]+', '', str(col)).lower()
-                mafe_customer_col = None
-                for col in mafe_df.columns:
-                    if normalize(col) == 'customername':
-                        mafe_customer_col = col
-                        break
-                if not mafe_customer_col:
-                    raise ValueError("Could not find 'Customer Name' column in the MAFE file")
-                processing_logs.append(f"INFO: Using '{otp_col}' from base_df and '{mafe_customer_col}' from mafe_df for merge.")
-
-                # Find the corresponding column in base_df (try 'Customer Name' or fallback to otp_col)
-                base_customer_col = None
-                for col in base_df.columns:
-                    if normalize(col) == 'customername':
-                        base_customer_col = col
-                        break
-                if not base_customer_col:
-                    base_customer_col = otp_col  # fallback
-
-                # Get unique codes and missions
-                unique_codes = base_df[otp_col].dropna().unique().tolist()
+                # Get unique codes and missions (use 'Code projet')
+                unique_codes = base_df['Code projet'].dropna().unique().tolist()
                 missions_from_heures_file = Mission.objects.filter(otp_l2__in=unique_codes)
                 all_candidate_libelles = sorted(set(m.libelle_de_projet for m in missions_from_heures_file if m.libelle_de_projet))
-                
+
                 # Handle mission selection
                 user_selected_libelles = selected_libelle_projet
                 processing_logs.append(f"INFO: user_selected_libelles from modal: {user_selected_libelles}")
-                
                 if user_selected_libelles:
                     target_mission_libelles_for_adjustment = user_selected_libelles
                     processing_logs.append(f"INFO: User selected missions for adjustment: {user_selected_libelles}")
                 else:
                     target_mission_libelles_for_adjustment = all_candidate_libelles
                     processing_logs.append(f"INFO: No missions selected in modal, so all eligible missions will be adjusted: {all_candidate_libelles}")
-                
                 processing_logs.append(f"INFO: Final target_mission_libelles_for_adjustment: {target_mission_libelles_for_adjustment}")
 
                 # --- MATCH main.py LOGIC ---
