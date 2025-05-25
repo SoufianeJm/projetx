@@ -307,8 +307,11 @@ document.addEventListener('DOMContentLoaded', function() {
             const workbook = XLSX.read(data, {type: 'array'});
             const sheet = workbook.Sheets[workbook.SheetNames[0]];
             const json = XLSX.utils.sheet_to_json(sheet, {defval: '', raw: false});
-            // Find the column named 'OTP L2' (case-insensitive)
-            const otpCol = Object.keys(json[0] || {}).find(col => col.trim().toLowerCase() === 'otp l2');
+            // Robust column name detection: ignore all whitespace, case, and non-breaking spaces
+            function normalizeColName(col) {
+                return col.replace(/[\s\u00A0]+/g, '').toLowerCase();
+            }
+            const otpCol = Object.keys(json[0] || {}).find(col => normalizeColName(col) === 'otpl2');
             if (!otpCol) {
                 alert('Could not find "OTP L2" column in the Heures IBM file.');
                 return callback([]);
