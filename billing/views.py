@@ -191,9 +191,11 @@ def facturation_slr(request):
                 base_df = pd.read_excel(heures_ibm_file_obj, sheet_name='base')
                 processing_logs.append(f"INFO: Heures IBM file parsed. base_df shape: {base_df.shape}")
                 
-                # Process MAFE report file
+                # Process MAFE report file (mimic main.py logic)
                 mafe_file_obj.seek(0)
-                mafe_df = pd.read_excel(mafe_file_obj)
+                mafe_raw = pd.read_excel(mafe_file_obj, header=None)
+                mafe_raw.columns = mafe_raw.iloc[14].astype(str).str.strip().str.replace('\n', ' ').str.replace('\r', ' ')
+                mafe_df = mafe_raw.drop(index=list(range(0, 15))).reset_index(drop=True)
                 processing_logs.append(f"INFO: MAFE report file parsed. mafe_df shape: {mafe_df.shape}")
 
                 # Get OTP L2 column in base_df
