@@ -173,62 +173,51 @@ def facturation_slr(request):
 
                 # --- Fetch Resource Data ---
                 resources_qs = Resource.objects.all()
-                db_resources_df = pd.DataFrame(list(resources_qs.values('full_name', 'grade', 'grade_des', 'rate_ibm', 'rate_des')))
+                db_resources_df = pd.DataFrame(list(resources_qs.values('full_name', 'grade', 'rate_ibm', 'rate_des')))
                 if db_resources_df.empty:
                     processing_logs.append("ERROR: No resources found in the database.")
                     return render(request, 'billing/facturation_slr.html', {'form': form, 'page_title': 'Facturation SLR', 'processing_logs': processing_logs})
-                db_resources_df['Resource Name'] = db_resources_df['full_name'].astype(str).str.lower().str.strip()
-                db_resources_df['Resource Grade'] = db_resources_df['grade']
-                db_resources_df['Rate IBM (Resource)'] = pd.to_numeric(db_resources_df['rate_ibm'], errors='coerce').fillna(0)
-                db_resources_df['Rate DES (Resource)'] = pd.to_numeric(db_resources_df['rate_des'], errors='coerce').fillna(0)
+                db_resources_df['Nom'] = db_resources_df['full_name'].astype(str).str.lower().str.strip()
+                db_resources_df['Grade'] = db_resources_df['grade']
+                db_resources_df['Rate'] = pd.to_numeric(db_resources_df['rate_ibm'], errors='coerce').fillna(0)
+                db_resources_df['Rate DES'] = pd.to_numeric(db_resources_df['rate_des'], errors='coerce').fillna(0)
                 processing_logs.append(f"INFO: Resource data loaded. Sample:<div class='log-table-sample'>{db_resources_df.head(1).to_html(classes='table table-sm table-bordered table-striped my-2 log-table-sample-width', index=False, border=0)}</div>")
 
                 # --- Fetch Mission Data ---
                 missions_qs = Mission.objects.all()
-                db_missions_df = pd.DataFrame(list(missions_qs.values('otp_l2', 'belgian_name', 'libelle_de_projet', 'code_type')))
+                db_missions_df = pd.DataFrame(list(missions_qs.values('otp_l2', 'belgian_name', 'libelle_de_projet')))
                 if db_missions_df.empty:
                     processing_logs.append("ERROR: No missions found in the database.")
                     return render(request, 'billing/facturation_slr.html', {'form': form, 'page_title': 'Facturation SLR', 'processing_logs': processing_logs})
-                db_missions_df['Code projet DB'] = db_missions_df['otp_l2']
-                db_missions_df['Libelle Projet DB'] = db_missions_df['belgian_name'].fillna('')
-                db_missions_df['Belgian Name DB'] = db_missions_df['libelle_de_projet']
+                db_missions_df['Code projet'] = db_missions_df['otp_l2']
+                db_missions_df['Libelle projet'] = db_missions_df['belgian_name'].fillna('')
+                db_missions_df['Belgian Name'] = db_missions_df['libelle_de_projet']
                 processing_logs.append(f"INFO: Mission data loaded. Sample:<div class='log-table-sample'>{db_missions_df.head(1).to_html(classes='table table-sm table-bordered table-striped my-2 log-table-sample-width', index=False, border=0)}</div>")
 
                 # --- Read Heures IBM file (base_df) ---
                 processing_logs.append(f"INFO: Attempting to read data from '{heures_ibm_file_obj.name}'...")
                 base_df = pd.read_excel(heures_ibm_file_obj, sheet_name='base', usecols="E,H,I,M,N")
-                base_df.columns = ['Code projet', 'Nom', 'Grade from File', 'Date', 'Heures']
+                base_df.columns = ['Code projet', 'Nom', 'Grade', 'Date', 'Heures']
                 base_df['Nom'] = base_df['Nom'].astype(str).str.lower().str.strip()
                 base_df['Heures'] = pd.to_numeric(base_df['Heures'], errors='coerce').fillna(0)
                 # Merge with Mission for Libelle projet
-                base_df = base_df.merge(db_missions_df[['Code projet DB', 'Libelle Projet DB']], left_on='Code projet', right_on='Code projet DB', how='left')
-                base_df['Libelle projet'] = base_df['Libelle Projet DB'].fillna('')
+                base_df = base_df.merge(db_missions_df[['Code projet', 'Libelle projet']], on='Code projet', how='left')
+                base_df['Libelle projet'] = base_df['Libelle projet'].fillna('')
                 processing_logs.append(f"INFO: Heures IBM data processed and merged with missions. Sample:<div class='log-table-sample'>{base_df.head(1).to_html(classes='table table-sm table-bordered table-striped my-2 log-table-sample-width', index=False, border=0)}</div>")
 
                 # --- Create employee_summary_df ---
                 employee_summary_df = (
-                    base_df.groupby(['Libelle projet', 'Nom', 'Grade from File'], as_index=False)
+                    base_df.groupby(['Libelle projet', 'Nom', 'Grade'], as_index=False)
                     .agg({'Heures': 'sum'})
                     .rename(columns={'Heures': 'Total Heures'})
                 )
                 # Merge with Resource for rates
                 employee_summary_df = employee_summary_df.merge(
-                    db_resources_df[['Resource Name', 'Resource Grade', 'Rate IBM (Resource)', 'Rate DES (Resource)']],
-                    left_on='Nom', right_on='Resource Name', how='left'
+                    db_resources_df[['Nom', 'Rate', 'Rate DES']],
+                    on='Nom', how='left'
                 )
-                employee_summary_df['Rate'] = employee_summary_df['Rate IBM (Resource)'].fillna(0)
-                employee_summary_df['Rate DES'] = employee_summary_df['Rate DES (Resource)'].fillna(0)
                 employee_summary_df['Total'] = employee_summary_df['Total Heures'] * employee_summary_df['Rate']
                 employee_summary_df['Total DES'] = employee_summary_df['Total Heures'] * employee_summary_df['Rate DES']
-
-                # Initial filtering of employee_summary_df
-                processing_logs.append(f"DEBUG: employee_summary_df before 'Total Heures != 0' filter: {len(employee_summary_df)} rows.")
-                if 'Total Heures' in employee_summary_df.columns:
-                    employee_summary_df = employee_summary_df[employee_summary_df['Total Heures'] != 0].copy()
-                    processing_logs.append(f"DEBUG: employee_summary_df after 'Total Heures != 0' filter: {len(employee_summary_df)} rows.")
-                else:
-                    processing_logs.append("WARNING: 'Total Heures' column not found in employee_summary_df for critical early filtering.")
-
                 processing_logs.append(f"INFO: Employee summary created. Sample:<div class='log-table-sample'>{employee_summary_df.head(1).to_html(classes='table table-sm table-bordered table-striped my-2 log-table-sample-width', index=False, border=0)}</div>")
 
                 # --- Read MAFE Report file (df_mafe) ---
@@ -248,25 +237,19 @@ def facturation_slr(request):
                 else:
                     processing_logs.append(f"ERROR: File '{mafe_file_obj.name}' does not have enough rows to extract header from row 15.")
                     df_mafe = pd.DataFrame()
-                if 'df_mafe' not in locals():
-                    processing_logs.append(f"CRITICAL ERROR: df_mafe was not defined after MAFE file processing attempt.")
-                    df_mafe = pd.DataFrame()
 
                 # --- Process mafe_subset_df ---
                 forecast_col_cleaned = next((col for col in df_mafe.columns if mois in col and 'Forecasts' in col and annee[-2:] in col), None)
-                dynamic_estimees_col_name = f'Estimees {parsed_mois_nom}'  # e.g., 'Estimees May'
-                
                 if forecast_col_cleaned:
-                    mafe_subset_df = df_mafe[['Country', 'Customer Name', forecast_col_cleaned]].rename(columns={forecast_col_cleaned: dynamic_estimees_col_name})
+                    mafe_subset_df = df_mafe[['Country', 'Customer Name', forecast_col_cleaned]].rename(columns={forecast_col_cleaned: 'Estimees'})
                     # Map Customer Name to Libelle projet using missions
                     mafe_subset_df = mafe_subset_df.merge(
-                        db_missions_df[['Belgian Name DB', 'Libelle Projet DB']],
-                        left_on='Customer Name', right_on='Belgian Name DB', how='left'
+                        db_missions_df[['Belgian Name', 'Libelle projet']],
+                        left_on='Customer Name', right_on='Belgian Name', how='left'
                     )
-                    mafe_subset_df['Libelle projet'] = mafe_subset_df['Libelle Projet DB']
                     mafe_subset_df['Libelle projet'] = mafe_subset_df['Libelle projet'].fillna(mafe_subset_df['Customer Name'])
                 else:
-                    mafe_subset_df = pd.DataFrame(columns=["Country", "Customer Name", "Libelle projet", dynamic_estimees_col_name])
+                    mafe_subset_df = pd.DataFrame(columns=["Country", "Customer Name", "Libelle projet", "Estimees"])
                 processing_logs.append(f"INFO: MAFE subset processed. Sample:<div class='log-table-sample'>{mafe_subset_df.head(1).to_html(classes='table table-sm table-bordered table-striped my-2 log-table-sample-width', index=False, border=0)}</div>")
 
                 # --- summary_by_proj_df ---
@@ -278,27 +261,24 @@ def facturation_slr(request):
 
                 # --- global_summary_df ---
                 global_summary_df = pd.merge(
-                    mafe_subset_df[['Libelle projet', dynamic_estimees_col_name]].drop_duplicates(),
+                    mafe_subset_df[['Libelle projet', 'Estimees']].drop_duplicates(),
                     summary_by_proj_df,
                     on='Libelle projet', how='left'
                 )
                 global_summary_df[['Total Heures', 'Total', 'Total DES']] = global_summary_df[['Total Heures', 'Total', 'Total DES']].fillna(0)
-                global_summary_df[dynamic_estimees_col_name] = pd.to_numeric(
-                    global_summary_df[dynamic_estimees_col_name].astype(str).str.strip().replace(['', '-', 'nan', 'None'], '0'),
-                    errors='coerce'
-                ).fillna(0)
+                global_summary_df['Estimees'] = pd.to_numeric(global_summary_df['Estimees'].astype(str).str.strip().replace(['', '-', 'nan', 'None'], '0'), errors='coerce').fillna(0)
                 processing_logs.append(f"DEBUG: global_summary_df created with {len(global_summary_df)} rows.")
 
                 # --- adjusted_df ---
                 adjusted_df = pd.merge(
                     employee_summary_df,
-                    global_summary_df[['Libelle projet', dynamic_estimees_col_name]],
+                    global_summary_df[['Libelle projet', 'Estimees']],
                     on='Libelle projet', how='left'
                 )
                 adjusted_df['Total_Projet_Cout'] = adjusted_df.groupby('Libelle projet')['Total'].transform('sum')
                 adjusted_df['total_rate_proj'] = adjusted_df.groupby('Libelle projet')['Rate'].transform('sum')
                 adjusted_df = adjusted_df[(adjusted_df['Total_Projet_Cout'] > 0) & (adjusted_df['total_rate_proj'] > 0)]
-                adjusted_df['coeff_total'] = adjusted_df[dynamic_estimees_col_name] / adjusted_df['Total_Projet_Cout']
+                adjusted_df['coeff_total'] = adjusted_df['Estimees'] / adjusted_df['Total_Projet_Cout']
                 adjusted_df['priority_coeff'] = adjusted_df['Rate'] / adjusted_df['total_rate_proj']
                 adjusted_df['final_coeff'] = adjusted_df['coeff_total'] * adjusted_df['priority_coeff']
                 adjusted_df['Adjusted Hours'] = (adjusted_df['Total Heures'] * (1 - adjusted_df['final_coeff'])).round()
@@ -314,9 +294,9 @@ def facturation_slr(request):
                 result_df = (
                     adjusted_df.groupby('Libelle projet', as_index=False)
                     .agg({'Total Heures': 'sum', 'Adjusted Hours': 'sum', 'Adjusted Cost': 'sum'})
-                    .merge(global_summary_df[['Libelle projet', dynamic_estimees_col_name]], on='Libelle projet', how='left')
+                    .merge(global_summary_df[['Libelle projet', 'Estimees']], on='Libelle projet', how='left')
                 )
-                result_df['Ecart'] = result_df[dynamic_estimees_col_name] - result_df['Adjusted Cost']
+                result_df['Ecart'] = result_df['Estimees'] - result_df['Adjusted Cost']
                 processing_logs.append(f"DEBUG: result_df created with {len(result_df)} rows.")
 
                 # --- Rounding ---
@@ -372,10 +352,10 @@ def facturation_slr(request):
                         })
 
                     # Write each sheet with NaN handling and final filtering
-                    write(base_df[['Date', 'Code projet', 'Nom', 'Grade from File', 'Heures', 'Libelle projet']], '00_Base')
-                    write(employee_summary_df[['Libelle projet', 'Nom', 'Grade from File', 'Total Heures', 'Rate', 'Rate DES', 'Total', 'Total DES']], '01_Employee_Summary')
-                    write(global_summary_df[['Libelle projet', 'Total Heures', 'Total', 'Total DES', dynamic_estimees_col_name]], '02_Global_Summary')
-                    write(adjusted_df[['ID', 'Libelle projet', 'Nom', 'Grade from File', 'Total Heures', 'Rate', 'Total', 'Adjusted Hours', 'Heures Retirées', 'Adjusted Cost']], '03_Adjusted')
+                    write(base_df[['Date', 'Code projet', 'Nom', 'Grade', 'Heures', 'Libelle projet']], '00_Base')
+                    write(employee_summary_df[['Libelle projet', 'Nom', 'Grade', 'Total Heures', 'Rate', 'Rate DES', 'Total', 'Total DES']], '01_Employee_Summary')
+                    write(global_summary_df[['Libelle projet', 'Total Heures', 'Total', 'Total DES', 'Estimees']], '02_Global_Summary')
+                    write(adjusted_df[['ID', 'Libelle projet', 'Nom', 'Grade', 'Total Heures', 'Rate', 'Total', 'Adjusted Hours', 'Heures Retirées', 'Adjusted Cost']], '03_Adjusted')
                     write(result_df, '04_Result')
 
                 output.seek(0)
