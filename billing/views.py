@@ -209,6 +209,19 @@ def facturation_slr(request):
                     }
                     return render(request, 'billing/facturation_slr.html', context)
 
+                # Find the OTP L2 column in mafe_df
+                processing_logs.append(f"mafe_df columns: {list(mafe_df.columns)}")
+                def normalize(col):
+                    return re.sub(r'[\s\u00A0_]+', '', str(col)).lower()
+                mafe_otp_col = None
+                for col in mafe_df.columns:
+                    if normalize(col) == 'otpl2':
+                        mafe_otp_col = col
+                        break
+                if not mafe_otp_col:
+                    raise ValueError("Could not find 'OTP L2' column in the MAFE file")
+                processing_logs.append(f"INFO: Using '{otp_col}' from base_df and '{mafe_otp_col}' from mafe_df for merge.")
+
                 # Extract unique codes and get missions
                 unique_codes = base_df[otp_col].dropna().unique().tolist()
                 processing_logs.append(f"INFO: Unique OTP L2 codes extracted: {unique_codes}")
@@ -260,6 +273,19 @@ def facturation_slr(request):
                 if not otp_col:
                     raise ValueError("Could not find 'OTP L2' column in the Heures IBM file")
 
+                # Find the OTP L2 column in mafe_df
+                processing_logs.append(f"mafe_df columns: {list(mafe_df.columns)}")
+                def normalize(col):
+                    return re.sub(r'[\s\u00A0_]+', '', str(col)).lower()
+                mafe_otp_col = None
+                for col in mafe_df.columns:
+                    if normalize(col) == 'otpl2':
+                        mafe_otp_col = col
+                        break
+                if not mafe_otp_col:
+                    raise ValueError("Could not find 'OTP L2' column in the MAFE file")
+                processing_logs.append(f"INFO: Using '{otp_col}' from base_df and '{mafe_otp_col}' from mafe_df for merge.")
+
                 # Get unique codes and missions
                 unique_codes = base_df[otp_col].dropna().unique().tolist()
                 missions_from_heures_file = Mission.objects.filter(otp_l2__in=unique_codes)
@@ -280,12 +306,11 @@ def facturation_slr(request):
 
                 # --- Begin Calculation Logic ---
                 # Merge Heures IBM and MAFE data
-                # Note: Adjust the merge logic based on your actual column names and requirements
                 merged_df = pd.merge(
                     base_df,
                     mafe_df,
                     left_on=otp_col,
-                    right_on='OTP_L2',  # Adjust this to match your MAFE file's column name
+                    right_on=mafe_otp_col,
                     how='left'
                 )
                 processing_logs.append(f"INFO: Merged DataFrames shape: {merged_df.shape}")
