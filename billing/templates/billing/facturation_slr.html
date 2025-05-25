@@ -307,6 +307,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const workbook = XLSX.read(data, {type: 'array'});
             const sheet = workbook.Sheets[workbook.SheetNames[0]];
             const json = XLSX.utils.sheet_to_json(sheet, {defval: '', raw: false});
+            // Debug: print all detected column names
+            console.log('SheetJS detected columns:', Object.keys(json[0] || {}));
             // Robust column name detection: ignore all whitespace, case, and non-breaking spaces
             function normalizeColName(col) {
                 return col.replace(/[\s\u00A0]+/g, '').toLowerCase();
