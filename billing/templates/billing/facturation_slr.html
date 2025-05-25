@@ -63,15 +63,7 @@
           </tr>
         </thead>
         <tbody>
-          {% for mission in missions %}
-          <tr>
-            <td><input type="checkbox" class="mission-checkbox" value="{{ mission.otp_l2 }}"></td>
-            <td>{{ mission.otp_l2 }}</td>
-            <td>{{ mission.belgian_name }}</td>
-            <td>{{ mission.libelle_de_projet }}</td>
-            <td>{{ mission.get_code_type_display }}</td>
-          </tr>
-          {% endfor %}
+          <!-- Will be populated by JS -->
         </tbody>
       </table>
     </div>
@@ -241,6 +233,8 @@
 </style>
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+<!-- SheetJS for reading Excel files in browser -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
 function handleFileChange(input, type) {
     const preview = document.getElementById(type + '-preview');
@@ -281,17 +275,67 @@ document.addEventListener('DOMContentLoaded', function() {
     const closeModalX = document.getElementById('closeMissionModal');
     const closeModalBtn = document.getElementById('closeMissionModalBtn');
     const proceedBtn = document.getElementById('proceedWithCalculationsBtn');
+    const missionTableBody = document.querySelector('#mission-select-table tbody');
+    // All missions from backend for JS filtering
+    const allMissions = JSON.parse('{{ missions_json|escapejs }}');
 
-    // Show modal
+    // Show modal with filtered missions
+    function showMissionModal(filteredOtps) {
+        // Filter missions to only those in filteredOtps
+        const filteredMissions = allMissions.filter(m => filteredOtps.includes(m.otp_l2));
+        // Populate table
+        missionTableBody.innerHTML = '';
+        if (filteredMissions.length === 0) {
+            missionTableBody.innerHTML = '<tr><td colspan="5">No missions found in the Heures IBM file.</td></tr>';
+        } else {
+            filteredMissions.forEach(mission => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                  <td><input type="checkbox" class="mission-checkbox" value="${mission.otp_l2}"></td>
+                  <td>${mission.otp_l2}</td>
+                  <td>${mission.belgian_name}</td>
+                  <td>${mission.libelle_de_projet}</td>
+                  <td>${mission.code_type_display}</td>
+                `;
+                missionTableBody.appendChild(row);
+            });
+        }
+        modal.style.display = 'flex';
+    }
+
+    // Read OTP L2 codes from the selected Heures IBM file using SheetJS
+    function extractOtpsFromHeuresFile(file, callback) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, {type: 'array'});
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            const json = XLSX.utils.sheet_to_json(sheet, {defval: '', raw: false});
+            // Find the column named 'OTP L2' (case-insensitive)
+            const otpCol = Object.keys(json[0] || {}).find(col => col.trim().toLowerCase() === 'otp l2');
+            if (!otpCol) {
+                alert('Could not find "OTP L2" column in the Heures IBM file.');
+                return callback([]);
+            }
+            const otps = Array.from(new Set(json.map(row => row[otpCol]).filter(Boolean)));
+            callback(otps);
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    // Show modal after reading file and extracting OTPs
     generateReportBtn.addEventListener('click', function(event) {
         event.preventDefault();
         const mafeFile = slrUploadForm.querySelector('input[name="mafe_report_file"]').files.length;
-        const heuresFile = slrUploadForm.querySelector('input[name="heures_ibm_file"]').files.length;
+        const heuresInput = slrUploadForm.querySelector('input[name="heures_ibm_file"]');
+        const heuresFile = heuresInput.files[0];
         if (!mafeFile || !heuresFile) {
             alert('Please select both MAFE report and Heures IBM files.');
             return;
         }
-        modal.style.display = 'flex';
+        extractOtpsFromHeuresFile(heuresFile, function(filteredOtps) {
+            showMissionModal(filteredOtps);
+        });
     });
 
     // Hide modal
