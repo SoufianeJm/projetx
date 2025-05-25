@@ -24,7 +24,7 @@
                 </div>
             </div>
             <div class="accepted-types">Accepted files: <b>XLSX</b></div>
-            <button type="submit" class="btn-facturation">Generate and Download Report</button>
+            <button type="submit" class="btn-facturation" id="generateReportBtn">Generate and Download Report</button>
         </form>
         {% if processing_logs %}
         <div class="mt-4 card">
@@ -40,6 +40,57 @@
             </ul>
         </div>
         {% endif %}
+    </div>
+</div>
+
+<!-- Mission Selection Modal -->
+<div class="modal fade" id="missionSelectModal" tabindex="-1" role="dialog" aria-labelledby="missionSelectModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="missionSelectModalLabel">Select Missions for Adjustment</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="table-responsive">
+                    <table class="table table-striped table-bordered" id="mission-select-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 50px;">Select</th>
+                                <th>OTP L2</th>
+                                <th>Libellé de Projet</th>
+                                <th>Belgian Name</th>
+                                <th>Type de Code</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for mission in missions %}
+                            <tr>
+                                <td>
+                                    <div class="custom-control custom-checkbox">
+                                        <input type="checkbox" class="custom-control-input mission-checkbox" 
+                                               id="mission_{{ mission.otp_l2 }}" 
+                                               value="{{ mission.otp_l2 }}">
+                                        <label class="custom-control-label" for="mission_{{ mission.otp_l2 }}"></label>
+                                    </div>
+                                </td>
+                                <td>{{ mission.otp_l2 }}</td>
+                                <td>{{ mission.belgian_name }}</td>
+                                <td>{{ mission.libelle_de_projet }}</td>
+                                <td>{{ mission.code_type }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="proceedWithCalculationsBtn">Proceed and Generate Report</button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -164,7 +215,20 @@
         max-width: 100%;
         overflow-x: auto;
     }
+    /* Modal Styles */
+    .modal-lg {
+        max-width: 900px;
+    }
+    .table-responsive {
+        max-height: 60vh;
+        overflow-y: auto;
+    }
+    .custom-control-label::before,
+    .custom-control-label::after {
+        top: 0.25rem;
+    }
 </style>
+
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
 <script>
 function handleFileChange(input, type) {
@@ -179,6 +243,7 @@ function handleFileChange(input, type) {
         preview.style.display = 'none';
     }
 }
+
 function removeFile(inputId, previewId) {
     const input = document.getElementById(inputId);
     input.value = '';
@@ -186,6 +251,7 @@ function removeFile(inputId, previewId) {
     preview.innerHTML = '';
     preview.style.display = 'none';
 }
+
 // Custom file input click
 Array.from(document.getElementsByClassName('custom-file-input-wrapper')).forEach(function(wrapper) {
     wrapper.addEventListener('click', function(e) {
@@ -193,6 +259,53 @@ Array.from(document.getElementsByClassName('custom-file-input-wrapper')).forEach
             const input = wrapper.querySelector('input[type="file"]');
             input.click();
         }
+    });
+});
+
+// Mission Selection Modal Handling
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('slr-upload-form');
+    const generateBtn = document.getElementById('generateReportBtn');
+    const proceedBtn = document.getElementById('proceedWithCalculationsBtn');
+    
+    generateBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        
+        // Check if files are selected
+        const mafeFile = document.getElementById('id_mafe_report_file').files[0];
+        const heuresFile = document.getElementById('id_heures_ibm_file').files[0];
+        
+        if (!mafeFile || !heuresFile) {
+            alert('Please select both MAFE Report and Heures IBM files.');
+            return;
+        }
+        
+        // Show the modal
+        $('#missionSelectModal').modal('show');
+    });
+    
+    proceedBtn.addEventListener('click', function() {
+        // Get selected mission OTP L2 codes
+        const selectedMissions = Array.from(document.querySelectorAll('.mission-checkbox:checked'))
+            .map(checkbox => checkbox.value);
+        
+        // Remove any existing hidden inputs for selected missions
+        document.querySelectorAll('input[name="selected_otp_l2_codes"]').forEach(input => input.remove());
+        
+        // Add hidden inputs for selected missions
+        selectedMissions.forEach(otpL2 => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'selected_otp_l2_codes';
+            input.value = otpL2;
+            form.appendChild(input);
+        });
+        
+        // Close the modal
+        $('#missionSelectModal').modal('hide');
+        
+        // Submit the form
+        form.submit();
     });
 });
 </script>

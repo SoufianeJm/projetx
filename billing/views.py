@@ -194,6 +194,16 @@ def facturation_slr(request):
                 db_missions_df['Belgian Name'] = db_missions_df['belgian_name']
                 processing_logs.append(f"INFO: Mission data loaded. Sample:<div class='log-table-sample'>{db_missions_df.head(1).to_html(classes='table table-sm table-bordered table-striped my-2 log-table-sample-width', index=False, border=0)}</div>")
 
+                # --- Get Selected Missions ---
+                selected_otp_l2_codes = request.POST.getlist('selected_otp_l2_codes')
+                if selected_otp_l2_codes:
+                    selected_missions_details_df = db_missions_df[db_missions_df['Code projet'].isin(selected_otp_l2_codes)]
+                    selected_libelles = selected_missions_details_df['Libelle projet'].unique().tolist()
+                    processing_logs.append(f"INFO: Missions selected for adjustment (Libelles): {selected_libelles}")
+                else:
+                    processing_logs.append("INFO: No missions selected for specific adjustment. All missions will have hours/costs treated as non-adjusted.")
+                    selected_libelles = []
+
                 # --- Read Heures IBM file (base_df) ---
                 processing_logs.append(f"INFO: Attempting to read data from '{heures_ibm_file_obj.name}'...")
                 base_df = pd.read_excel(heures_ibm_file_obj, sheet_name='base', usecols="E,H,I,M,N")
@@ -287,6 +297,17 @@ def facturation_slr(request):
                 adjusted_df['priority_coeff'] = adjusted_df['Rate'] / adjusted_df['total_rate_proj']
                 adjusted_df['final_coeff'] = adjusted_df['coeff_total'] * adjusted_df['priority_coeff']
                 
+                # Initialize final_coeff to 0 for all rows
+                adjusted_df['final_coeff'] = 0.0
+                
+                # Calculate final_coeff only for selected missions
+                if selected_libelles:
+                    selected_mask = adjusted_df['Libelle projet'].isin(selected_libelles)
+                    adjusted_df.loc[selected_mask, 'final_coeff'] = (
+                        adjusted_df.loc[selected_mask, 'coeff_total'] * 
+                        adjusted_df.loc[selected_mask, 'priority_coeff']
+                    )
+                
                 # Calculate adjusted hours with proper rounding
                 adjusted_df['Adjusted Hours'] = (adjusted_df['Total Heures'] * (1 - adjusted_df['final_coeff'])).round()
                 adjusted_df['Adjusted Hours'] = adjusted_df['Adjusted Hours'].apply(lambda x: max(x, 0))
@@ -345,15 +366,6 @@ def facturation_slr(request):
                         # Handle NaN values before any other processing
                         df = handle_nan_values(df, sheet)
                         
-                        # Final filtering check before writing to Excel
-                        if 'Total Heures' in df.columns:
-                            processing_logs.append(f"DEBUG: {sheet} before final filter: {len(df)} rows")
-                            if sheet != '03_Adjusted':  # Skip filter for '03_Adjusted' sheet
-                                df = df[df['Total Heures'] != 0].copy()
-                                processing_logs.append(f"DEBUG: {sheet} after filtering out zero 'Total Heures': {len(df)} rows")
-                            else:
-                                processing_logs.append(f"DEBUG: Skipping 'Total Heures != 0' filter for sheet '{sheet}'")
-                        
                         if selected_cols:
                             df = df[selected_cols]
                         df.to_excel(writer, sheet_name=sheet, index=False, startrow=1, header=False)
@@ -391,10 +403,13 @@ def facturation_slr(request):
                 for error in errors:
                     processing_logs.append(f"ERROR (Form field: {field}): {error}")
 
+    # For GET request, fetch all missions for the modal
+    missions = Mission.objects.all().order_by('otp_l2')
     context = {
         'form': form,
         'page_title': 'Facturation SLR',
-        'processing_logs': processing_logs
+        'processing_logs': processing_logs,
+        'missions': missions
     }
     return render(request, 'billing/facturation_slr.html', context)
 
