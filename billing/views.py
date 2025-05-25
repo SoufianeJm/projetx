@@ -14,6 +14,8 @@ from django.contrib import messages
 import os
 import traceback
 from django.db import models
+import json
+from django.core.serializers.json import DjangoJSONEncoder
 
 # Create your views here.
 
@@ -155,9 +157,20 @@ def facturation_slr(request):
                 base_df = pd.read_excel(heures_ibm_file_obj, sheet_name='base')
                 unique_codes = base_df['OTP L2'].dropna().unique().tolist()
                 missions = Mission.objects.filter(otp_l2__in=unique_codes)
+                # Pass all missions as JSON for frontend filtering
+                all_missions = Mission.objects.all()
+                missions_json = json.dumps([
+                    {
+                        'otp_l2': m.otp_l2,
+                        'belgian_name': m.belgian_name,
+                        'libelle_de_projet': m.libelle_de_projet,
+                        'code_type_display': m.get_code_type_display(),
+                    } for m in all_missions
+                ], cls=DjangoJSONEncoder)
                 context = {
                     'form': form,
                     'missions': missions,
+                    'missions_json': missions_json,
                     'show_modal': True,
                     'processing_logs': processing_logs,
                     'page_title': 'Facturation SLR',
@@ -168,6 +181,7 @@ def facturation_slr(request):
                 context = {
                     'form': form,
                     'missions': Mission.objects.none(),
+                    'missions_json': '[]',
                     'show_modal': False,
                     'processing_logs': processing_logs,
                     'page_title': 'Facturation SLR',
@@ -430,12 +444,22 @@ def facturation_slr(request):
                 for error in errors:
                     processing_logs.append(f"ERROR (Form field: {field}): {error}")
 
-    # For GET request, show no missions (or all, if you prefer)
+    # For GET request, show all missions as JSON for JS filtering
+    all_missions = Mission.objects.all()
+    missions_json = json.dumps([
+        {
+            'otp_l2': m.otp_l2,
+            'belgian_name': m.belgian_name,
+            'libelle_de_projet': m.libelle_de_projet,
+            'code_type_display': m.get_code_type_display(),
+        } for m in all_missions
+    ], cls=DjangoJSONEncoder)
     context = {
         'form': form,
         'page_title': 'Facturation SLR',
         'processing_logs': processing_logs,
         'missions': Mission.objects.none(),
+        'missions_json': missions_json,
         'show_modal': False,
     }
     return render(request, 'billing/facturation_slr.html', context)
