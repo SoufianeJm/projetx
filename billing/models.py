@@ -28,6 +28,7 @@ class Resource(models.Model):
     GRADE_DES_SC2 = 'DES_SC2'
     GRADE_DES_SC1 = 'DES_SC1'
     GRADE_DES_C2 = 'DES_C2'
+    GRADE_DES_C1 = 'DES_C1'
     GRADE_DES_CJ = 'DES_CJ'
     GRADE_DES_STG = 'DES_STG'
     GRADE_DES_NA = 'DES_NA'
@@ -39,6 +40,7 @@ class Resource(models.Model):
         (GRADE_DES_SC2, 'Senior Consultant 2'),
         (GRADE_DES_SC1, 'Senior Consultant 1'),
         (GRADE_DES_C2, 'Consultant 2'),
+        (GRADE_DES_C1, 'Consultant 1'),
         (GRADE_DES_CJ, 'Consultant Junior'),
         (GRADE_DES_STG, 'Stagiaire'),
         (GRADE_DES_NA, 'N/A'),
