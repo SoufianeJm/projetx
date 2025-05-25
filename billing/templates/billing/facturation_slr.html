@@ -13,6 +13,39 @@
             <button type="submit" class="btn btn-primary mt-3" id="generateReportBtn">
                 <i class="fas fa-file-excel me-2"></i>Generate and Download Report
             </button>
+
+            <!-- Move the modal inside the form so checkboxes are submitted -->
+            <div id="missionSelectModal" class="custom-modal" {% if show_modal %}style="display:flex;"{% endif %}>
+              <div class="custom-modal-content">
+                <span class="custom-modal-close" id="closeMissionModal">&times;</span>
+                <h3>Select Missions for Adjustment</h3>
+                <p>Select the missions below that should have their hours and costs adjusted. Others will be reported with their original values.</p>
+                <div class="table-responsive">
+                  <table class="table" id="mission-select-table">
+                    <thead>
+                      <tr>
+                        <th>Select</th>
+                        <th>Libellé de Projet</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for libelle in missions %}
+                      <tr>
+                        <td><input type="checkbox" class="mission-checkbox" name="selected_libelle_projet" value="{{ libelle }}"></td>
+                        <td>{{ libelle }}</td>
+                      </tr>
+                      {% empty %}
+                      <tr><td colspan="2">No missions found in the Heures IBM file.</td></tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+                <div style="text-align:right; margin-top: 1em;">
+                  <button type="button" id="closeMissionModalBtn" class="modal-btn">Cancel</button>
+                  <button type="button" id="proceedWithCalculationsBtn" class="modal-btn modal-btn-primary">Proceed and Generate Report</button>
+                </div>
+              </div>
+            </div>
         </form>
         {% if processing_logs %}
         <div class="mt-4 card">
@@ -29,39 +62,6 @@
         </div>
         {% endif %}
     </div>
-</div>
-
-<!-- Pure CSS/JS Modal for Mission Selection -->
-<div id="missionSelectModal" class="custom-modal" {% if show_modal %}style="display:flex;"{% endif %}>
-  <div class="custom-modal-content">
-    <span class="custom-modal-close" id="closeMissionModal">&times;</span>
-    <h3>Select Missions for Adjustment</h3>
-    <p>Select the missions below that should have their hours and costs adjusted. Others will be reported with their original values.</p>
-    <div class="table-responsive">
-      <table class="table" id="mission-select-table">
-        <thead>
-          <tr>
-            <th>Select</th>
-            <th>Libellé de Projet</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for libelle in missions %}
-          <tr>
-            <td><input type="checkbox" class="mission-checkbox" name="selected_libelle_projet" value="{{ libelle }}"></td>
-            <td>{{ libelle }}</td>
-          </tr>
-          {% empty %}
-          <tr><td colspan="2">No missions found in the Heures IBM file.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    <div style="text-align:right; margin-top: 1em;">
-      <button type="button" id="closeMissionModalBtn" class="modal-btn">Cancel</button>
-      <button type="button" id="proceedWithCalculationsBtn" class="modal-btn modal-btn-primary">Proceed and Generate Report</button>
-    </div>
-  </div>
 </div>
 
 <style>
