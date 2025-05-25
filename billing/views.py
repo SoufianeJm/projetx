@@ -159,11 +159,64 @@ def facturation_slr(request):
         mafe_file_obj = request.FILES.get('mafe_report_file')
         selected_libelle_projet = request.POST.getlist('selected_libelle_projet')
 
+        # Log file upload status
+        if heures_ibm_file_obj:
+            processing_logs.append("INFO: Heures IBM file uploaded: {}".format(heures_ibm_file_obj.name))
+        else:
+            processing_logs.append("ERROR: No Heures IBM file uploaded.")
+        if mafe_file_obj:
+            processing_logs.append("INFO: MAFE report file uploaded: {}".format(mafe_file_obj.name))
+        else:
+            processing_logs.append("ERROR: No MAFE report file uploaded.")
+
         # 1. Modal trigger: show modal with all candidate missions
         if heures_ibm_file_obj and not selected_libelle_projet:
             try:
                 heures_ibm_file_obj.seek(0)
                 base_df = pd.read_excel(heures_ibm_file_obj, sheet_name='base')
+                processing_logs.append(f"INFO: Heures IBM file parsed. base_df shape: {base_df.shape}")
+                otp_col = find_otp_l2_column(base_df)
+                if not otp_col:
+                    processing_logs.append("ERROR: Could not find 'OTP L2' column in the Heures IBM file.")
+                    context = {
+                        'form': form,
+                        'missions': [],
+                        'show_modal': False,
+                        'processing_logs': processing_logs,
+                        'page_title': 'Facturation SLR',
+                    }
+                    return render(request, 'billing/facturation_slr.html', context)
+                unique_codes = base_df[otp_col].dropna().unique().tolist()
+                processing_logs.append(f"INFO: Unique OTP L2 codes extracted: {unique_codes}")
+                missions_from_heures_file = Mission.objects.filter(otp_l2__in=unique_codes)
+                unique_libelles = sorted(set(m.libelle_de_projet for m in missions_from_heures_file if m.libelle_de_projet))
+                processing_logs.append(f"INFO: Candidate missions for adjustment (libelle_de_projet): {unique_libelles}")
+                context = {
+                    'form': form,
+                    'missions': unique_libelles,
+                    'show_modal': True,
+                    'processing_logs': processing_logs,
+                    'page_title': 'Facturation SLR',
+                }
+                return render(request, 'billing/facturation_slr.html', context)
+            except Exception as e:
+                processing_logs.append(f"ERROR: Could not parse missions from Heures IBM file: {str(e)}<br><pre>{traceback.format_exc()}</pre>")
+                context = {
+                    'form': form,
+                    'missions': [],
+                    'show_modal': False,
+                    'processing_logs': processing_logs,
+                    'page_title': 'Facturation SLR',
+                }
+                return render(request, 'billing/facturation_slr.html', context)
+
+        # 2. Modal submit: determine target missions for adjustment
+        target_mission_libelles_for_adjustment = []
+        if heures_ibm_file_obj and selected_libelle_projet is not None:
+            try:
+                heures_ibm_file_obj.seek(0)
+                base_df = pd.read_excel(heures_ibm_file_obj, sheet_name='base')
+                processing_logs.append(f"INFO: Heures IBM file parsed (modal submit). base_df shape: {base_df.shape}")
                 otp_col = find_otp_l2_column(base_df)
                 if not otp_col:
                     processing_logs.append("ERROR: Could not find 'OTP L2' column in the Heures IBM file.")
@@ -177,17 +230,89 @@ def facturation_slr(request):
                     return render(request, 'billing/facturation_slr.html', context)
                 unique_codes = base_df[otp_col].dropna().unique().tolist()
                 missions_from_heures_file = Mission.objects.filter(otp_l2__in=unique_codes)
-                unique_libelles = sorted(set(m.libelle_de_projet for m in missions_from_heures_file if m.libelle_de_projet))
+                all_candidate_libelles = sorted(set(m.libelle_de_projet for m in missions_from_heures_file if m.libelle_de_projet))
+                user_selected_libelles = selected_libelle_projet
+                processing_logs.append(f"INFO: user_selected_libelles from modal: {user_selected_libelles}")
+                if user_selected_libelles:
+                    target_mission_libelles_for_adjustment = user_selected_libelles
+                    processing_logs.append(f"INFO: User selected missions for adjustment: {user_selected_libelles}")
+                else:
+                    target_mission_libelles_for_adjustment = all_candidate_libelles
+                    processing_logs.append(f"INFO: No missions selected in modal, so all eligible missions will be adjusted: {all_candidate_libelles}")
+                processing_logs.append(f"INFO: Final target_mission_libelles_for_adjustment: {target_mission_libelles_for_adjustment}")
+
+                # --- Begin Calculation Logic ---
+                # Dummy DataFrame creation for demonstration (replace with real logic)
+                # For demonstration, let's assume adjusted_df is created from base_df and has the required columns
+                # In real code, replace this with your actual calculation pipeline
+                adjusted_df = base_df.copy()
+                # Simulate columns for demonstration
+                for col in ['Libelle projet', 'Total Heures', 'Rate', 'Total_Projet_Cout', 'total_rate_proj', 'coeff_total', 'priority_coeff']:
+                    if col not in adjusted_df.columns:
+                        adjusted_df[col] = 1.0
+                adjusted_df['Libelle projet'] = adjusted_df['Libelle projet'] if 'Libelle projet' in adjusted_df.columns else adjusted_df[otp_col].astype(str)
+                # --- End Dummy DataFrame creation ---
+
+                # Log shape before adjustment
+                processing_logs.append(f"INFO: adjusted_df shape before adjustment: {adjusted_df.shape}")
+
+                # Conditional adjustment logic
+                adjusted_df['final_coeff'] = 0.0
+                adjustment_mask = adjusted_df['Libelle projet'].isin(target_mission_libelles_for_adjustment)
+                valid_mask = (adjusted_df['Total_Projet_Cout'] > 0) & (adjusted_df['total_rate_proj'] > 0)
+                full_mask = adjustment_mask & valid_mask
+                adjusted_df.loc[full_mask, 'final_coeff'] = (
+                    adjusted_df.loc[full_mask, 'coeff_total'] * adjusted_df.loc[full_mask, 'priority_coeff']
+                )
+                # Adjusted Hours/Cost
+                adjusted_df['Adjusted Hours'] = adjusted_df['Total Heures'] * adjusted_df['final_coeff']
+                adjusted_df['Adjusted Cost'] = adjusted_df['Total_Projet_Cout'] * adjusted_df['final_coeff']
+
+                # Log DataFrame sample after adjustment
+                sample_cols = ['Libelle projet', 'Total Heures', 'Rate', 'Total_Projet_Cout', 'total_rate_proj', 'coeff_total', 'priority_coeff', 'final_coeff', 'Adjusted Hours', 'Adjusted Cost']
+                sample_cols = [c for c in sample_cols if c in adjusted_df.columns]
+                processing_logs.append("<b>Sample of adjusted_df after final_coeff calculation:</b><div class='log-table-sample'>" + adjusted_df[sample_cols].head(8).to_html(index=False) + "</div>")
+
+                # --- Excel Output Block ---
+                try:
+                    output = BytesIO()
+                    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                        base_df.to_excel(writer, index=False, sheet_name='01_HeuresIBM_Base')
+                        # Simulate employee_summary_df and global_summary_df for demonstration
+                        employee_summary_df = base_df.head(5).copy()
+                        global_summary_df = base_df.head(3).copy()
+                        employee_summary_df.to_excel(writer, index=False, sheet_name='02_EmployeeSummary')
+                        global_summary_df.to_excel(writer, index=False, sheet_name='02_GlobalSummary')
+                        adjusted_df.to_excel(writer, index=False, sheet_name='03_Adjusted')
+                        # Simulate result_df for demonstration
+                        result_df = adjusted_df.head(10).copy()
+                        result_df.to_excel(writer, index=False, sheet_name='04_Result')
+                    output.seek(0)
+                    now_str = datetime.now().strftime('%Y%m%d_%H%M%S')
+                    filename = f"SLR_Facturation_{now_str}.xlsx"
+                    processing_logs.append(f"INFO: Excel file generated with sheets: 01_HeuresIBM_Base, 02_EmployeeSummary, 02_GlobalSummary, 03_Adjusted, 04_Result")
+                    response = HttpResponse(
+                        output.getvalue(),
+                        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                    )
+                    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+                    return response
+                except Exception as e:
+                    processing_logs.append(f"ERROR: Failed to generate Excel file: {str(e)}<br><pre>{traceback.format_exc()}</pre>")
+                    # Fall through to render logs
+
+                # --- End Excel Output Block ---
+
                 context = {
                     'form': form,
-                    'missions': unique_libelles,
-                    'show_modal': True,
+                    'missions': all_candidate_libelles,
+                    'show_modal': False,
                     'processing_logs': processing_logs,
                     'page_title': 'Facturation SLR',
                 }
                 return render(request, 'billing/facturation_slr.html', context)
             except Exception as e:
-                processing_logs.append(f"ERROR: Could not parse missions from Heures IBM file: {str(e)}")
+                processing_logs.append(f"ERROR: Exception during calculation: {str(e)}<br><pre>{traceback.format_exc()}</pre>")
                 context = {
                     'form': form,
                     'missions': [],
@@ -196,43 +321,6 @@ def facturation_slr(request):
                     'page_title': 'Facturation SLR',
                 }
                 return render(request, 'billing/facturation_slr.html', context)
-
-        # 2. Modal submit: determine target missions for adjustment
-        target_mission_libelles_for_adjustment = []
-        if heures_ibm_file_obj and selected_libelle_projet is not None:
-            heures_ibm_file_obj.seek(0)
-            base_df = pd.read_excel(heures_ibm_file_obj, sheet_name='base')
-            otp_col = find_otp_l2_column(base_df)
-            unique_codes = base_df[otp_col].dropna().unique().tolist()
-            missions_from_heures_file = Mission.objects.filter(otp_l2__in=unique_codes)
-            all_candidate_libelles = sorted(set(m.libelle_de_projet for m in missions_from_heures_file if m.libelle_de_projet))
-            user_selected_libelles = selected_libelle_projet
-            if user_selected_libelles:
-                target_mission_libelles_for_adjustment = user_selected_libelles
-                processing_logs.append(f"INFO: User selected missions for adjustment: {user_selected_libelles}")
-            else:
-                target_mission_libelles_for_adjustment = all_candidate_libelles
-                processing_logs.append("INFO: No missions selected in modal, so all eligible missions will be adjusted: " + str(all_candidate_libelles))
-
-            # ... (rest of your calculation logic) ...
-            # For demonstration, let's show how the adjustment mask would be used:
-            # (Assume adjusted_df is already created and has 'Libelle projet' column)
-            # adjusted_df['final_coeff'] = 0.0
-            # adjustment_mask = adjusted_df['Libelle projet'].isin(target_mission_libelles_for_adjustment)
-            # adjusted_df.loc[adjustment_mask, 'final_coeff'] = (
-            #     adjusted_df.loc[adjustment_mask, 'coeff_total'] *
-            #     adjusted_df.loc[adjustment_mask, 'priority_coeff']
-            # )
-
-            # 4. Comment out Excel output, just re-render template with logs/results
-            context = {
-                'form': form,
-                'missions': all_candidate_libelles,
-                'show_modal': False,
-                'processing_logs': processing_logs,
-                'page_title': 'Facturation SLR',
-            }
-            return render(request, 'billing/facturation_slr.html', context)
 
         # fallback for GET or other cases
     context = {
