@@ -306,16 +306,29 @@ document.addEventListener('DOMContentLoaded', function() {
             const data = new Uint8Array(e.target.result);
             const workbook = XLSX.read(data, {type: 'array'});
             const sheet = workbook.Sheets[workbook.SheetNames[0]];
-            const json = XLSX.utils.sheet_to_json(sheet, {defval: '', raw: false});
-            // Debug: print all detected column names
-            console.log('SheetJS detected columns:', Object.keys(json[0] || {}));
-            // Robust column name detection: ignore all whitespace, case, and non-breaking spaces
+            // Get all rows as arrays
+            const allRows = XLSX.utils.sheet_to_json(sheet, {header: 1, defval: '', raw: false});
+            // Find the header row index by looking for a cell that matches 'OTP L2'
             function normalizeColName(col) {
                 return col.replace(/[\s\u00A0]+/g, '').toLowerCase();
             }
+            let headerRowIndex = -1;
+            for (let i = 0; i < allRows.length; i++) {
+                if (allRows[i].some(cell => normalizeColName(cell) === 'otpl2')) {
+                    headerRowIndex = i;
+                    break;
+                }
+            }
+            if (headerRowIndex === -1) {
+                alert('Could not find "OTP L2" column in the Heures IBM file.');
+                return callback([]);
+            }
+            // Now parse the sheet using the correct header row
+            const json = XLSX.utils.sheet_to_json(sheet, {defval: '', raw: false, range: headerRowIndex});
+            // Find the normalized OTP L2 column name
             const otpCol = Object.keys(json[0] || {}).find(col => normalizeColName(col) === 'otpl2');
             if (!otpCol) {
-                alert('Could not find "OTP L2" column in the Heures IBM file.');
+                alert('Could not find "OTP L2" column in the Heures IBM file (after header row detection).');
                 return callback([]);
             }
             const otps = Array.from(new Set(json.map(row => row[otpCol]).filter(Boolean)));
