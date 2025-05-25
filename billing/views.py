@@ -348,8 +348,11 @@ def facturation_slr(request):
                         # Final filtering check before writing to Excel
                         if 'Total Heures' in df.columns:
                             processing_logs.append(f"DEBUG: {sheet} before final filter: {len(df)} rows")
-                            df = df[df['Total Heures'] != 0].copy()
-                            processing_logs.append(f"DEBUG: {sheet} after final filter: {len(df)} rows")
+                            if sheet != '03_Adjusted':  # Skip filter for '03_Adjusted' sheet
+                                df = df[df['Total Heures'] != 0].copy()
+                                processing_logs.append(f"DEBUG: {sheet} after filtering out zero 'Total Heures': {len(df)} rows")
+                            else:
+                                processing_logs.append(f"DEBUG: Skipping 'Total Heures != 0' filter for sheet '{sheet}'")
                         
                         if selected_cols:
                             df = df[selected_cols]
