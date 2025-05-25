@@ -211,6 +211,16 @@ def facturation_slr(request):
                 employee_summary_df['Rate DES'] = employee_summary_df['Rate DES (Resource)'].fillna(0)
                 employee_summary_df['Total'] = employee_summary_df['Total Heures'] * employee_summary_df['Rate']
                 employee_summary_df['Total DES'] = employee_summary_df['Total Heures'] * employee_summary_df['Rate DES']
+
+                # Filter out rows where Total Heures is 0
+                initial_rows = len(employee_summary_df)
+                employee_summary_df = employee_summary_df[employee_summary_df['Total Heures'] != 0].copy()
+                filtered_rows = initial_rows - len(employee_summary_df)
+                if filtered_rows > 0:
+                    processing_logs.append(f"INFO: Filtered out {filtered_rows} rows from Employee Summary where 'Total Heures' is 0. Remaining rows: {len(employee_summary_df)}")
+                else:
+                    processing_logs.append(f"INFO: No rows with 'Total Heures' equal to 0 found in Employee Summary.")
+
                 processing_logs.append(f"INFO: Employee summary created. Sample:<div class='log-table-sample'>{employee_summary_df.head(1).to_html(classes='table table-sm table-bordered table-striped my-2 log-table-sample-width', index=False, border=0)}</div>")
 
                 # --- Read MAFE Report file (df_mafe) ---
