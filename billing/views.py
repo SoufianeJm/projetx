@@ -200,7 +200,7 @@ def facturation_slr(request):
                 # Log the first 20 rows for debugging
                 processing_logs.append('<b>First 20 rows of MAFE file:</b><br><pre>' + '\n'.join(str(list(mafe_raw.iloc[i].values)) for i in range(min(20, len(mafe_raw)))) + '</pre>')
                 header_row_idx = None
-                for i in range(min(20, len(mafe_raw))):
+                for i in range(len(mafe_raw)):
                     row = mafe_raw.iloc[i].astype(str).str.lower().str.strip()
                     if any('customer name' in cell for cell in row):
                         header_row_idx = i
