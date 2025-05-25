@@ -145,9 +145,38 @@ def facturation_slr(request):
 
     if request.method == 'POST':
         form = SLRFileUploadForm(request.POST, request.FILES)
+        heures_ibm_file_obj = request.FILES.get('heures_ibm_file')
+        mafe_file_obj = request.FILES.get('mafe_report_file')
+        selected_otp_l2_codes = request.POST.getlist('selected_otp_l2_codes')
+
+        # If missions have not been selected yet, show the modal with only missions from the heures file
+        if heures_ibm_file_obj and not selected_otp_l2_codes:
+            try:
+                base_df = pd.read_excel(heures_ibm_file_obj, sheet_name='base', usecols="E,H,I,M,N")
+                base_df.columns = ['Code projet', 'Nom', 'Grade', 'Date', 'Heures']
+                unique_codes = base_df['Code projet'].dropna().unique().tolist()
+                missions = Mission.objects.filter(otp_l2__in=unique_codes)
+                context = {
+                    'form': form,
+                    'missions': missions,
+                    'show_modal': True,
+                    'processing_logs': processing_logs,
+                    'page_title': 'Facturation SLR',
+                }
+                return render(request, 'billing/facturation_slr.html', context)
+            except Exception as e:
+                processing_logs.append(f"ERROR: Could not parse missions from Heures IBM file: {str(e)}")
+                context = {
+                    'form': form,
+                    'missions': Mission.objects.none(),
+                    'show_modal': False,
+                    'processing_logs': processing_logs,
+                    'page_title': 'Facturation SLR',
+                }
+                return render(request, 'billing/facturation_slr.html', context)
+
+        # If missions have been selected, continue with the normal logic (existing code follows)
         if form.is_valid():
-            mafe_file_obj = request.FILES['mafe_report_file']
-            heures_ibm_file_obj = request.FILES['heures_ibm_file']
             processing_logs.append(f"INFO: File '{mafe_file_obj.name}' received for processing.")
             processing_logs.append(f"INFO: File '{heures_ibm_file_obj.name}' received for processing.")
             try:
@@ -195,7 +224,6 @@ def facturation_slr(request):
                 processing_logs.append(f"INFO: Mission data loaded. Sample:<div class='log-table-sample'>{db_missions_df.head(1).to_html(classes='table table-sm table-bordered table-striped my-2 log-table-sample-width', index=False, border=0)}</div>")
 
                 # --- Get Selected Missions ---
-                selected_otp_l2_codes = request.POST.getlist('selected_otp_l2_codes')
                 if selected_otp_l2_codes:
                     selected_missions_details_df = db_missions_df[db_missions_df['Code projet'].isin(selected_otp_l2_codes)]
                     selected_libelles = selected_missions_details_df['Libelle projet'].unique().tolist()
@@ -403,13 +431,13 @@ def facturation_slr(request):
                 for error in errors:
                     processing_logs.append(f"ERROR (Form field: {field}): {error}")
 
-    # For GET request, fetch all missions for the modal
-    missions = Mission.objects.all().order_by('otp_l2')
+    # For GET request, show no missions (or all, if you prefer)
     context = {
         'form': form,
         'page_title': 'Facturation SLR',
         'processing_logs': processing_logs,
-        'missions': missions
+        'missions': Mission.objects.none(),
+        'show_modal': False,
     }
     return render(request, 'billing/facturation_slr.html', context)
 
