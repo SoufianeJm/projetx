@@ -194,28 +194,11 @@ def facturation_slr(request):
                 base_df = pd.read_excel(heures_ibm_file_obj, sheet_name='base')
                 processing_logs.append(f"INFO: Heures IBM file parsed. base_df shape: {base_df.shape}")
                 
-                # Process MAFE report file (mimic main.py logic)
+                # Process MAFE report file EXACTLY like main.py
                 mafe_file_obj.seek(0)
-                mafe_raw = pd.read_excel(mafe_file_obj, header=None)
-                # Log all rows that contain 'customer' in any cell
-                customer_rows = []
-                for i in range(len(mafe_raw)):
-                    row = mafe_raw.iloc[i].astype(str).str.lower().str.replace('\xa0', ' ').str.strip()
-                    if any('customer' in cell for cell in row):
-                        customer_rows.append(f'Row {i}: ' + str(list(mafe_raw.iloc[i].values)))
-                if customer_rows:
-                    processing_logs.append('<b>Rows with "customer" in any cell:</b><br><pre>' + '\n'.join(customer_rows) + '</pre>')
-
-                header_row_idx = None
-                for i in range(len(mafe_raw)):
-                    row = mafe_raw.iloc[i].astype(str).str.lower().str.replace('\xa0', ' ').str.strip()
-                    if any('customer' in cell for cell in row):
-                        header_row_idx = i
-                        break
-                if header_row_idx is None:
-                    raise ValueError("Could not find a header row with 'customer' in the MAFE file")
-                mafe_raw.columns = mafe_raw.iloc[header_row_idx].astype(str).str.strip().str.replace('\n', ' ').str.replace('\r', ' ')
-                mafe_df = mafe_raw.drop(index=list(range(0, header_row_idx + 1))).reset_index(drop=True)
+                mafe_raw = pd.read_excel(mafe_file_obj, sheet_name='(Tab A) FULLY COMMITTED', header=None)
+                mafe_raw.columns = mafe_raw.iloc[14].astype(str).str.strip().str.replace('\n', ' ').str.replace('\r', ' ')
+                mafe_df = mafe_raw.drop(index=list(range(0, 15))).reset_index(drop=True)
                 processing_logs.append(f"INFO: MAFE report file parsed. mafe_df shape: {mafe_df.shape}")
 
                 # Get OTP L2 column in base_df
