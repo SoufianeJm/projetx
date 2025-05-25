@@ -194,8 +194,16 @@ def facturation_slr(request):
                 # Process MAFE report file (mimic main.py logic)
                 mafe_file_obj.seek(0)
                 mafe_raw = pd.read_excel(mafe_file_obj, header=None)
-                mafe_raw.columns = mafe_raw.iloc[14].astype(str).str.strip().str.replace('\n', ' ').str.replace('\r', ' ')
-                mafe_df = mafe_raw.drop(index=list(range(0, 15))).reset_index(drop=True)
+                header_row_idx = None
+                for i in range(min(20, len(mafe_raw))):
+                    row = mafe_raw.iloc[i].astype(str).str.lower().str.strip()
+                    if any('customer name' in cell for cell in row):
+                        header_row_idx = i
+                        break
+                if header_row_idx is None:
+                    raise ValueError("Could not find a header row with 'Customer Name' in the MAFE file")
+                mafe_raw.columns = mafe_raw.iloc[header_row_idx].astype(str).str.strip().str.replace('\n', ' ').str.replace('\r', ' ')
+                mafe_df = mafe_raw.drop(index=list(range(0, header_row_idx + 1))).reset_index(drop=True)
                 processing_logs.append(f"INFO: MAFE report file parsed. mafe_df shape: {mafe_df.shape}")
 
                 # Get OTP L2 column in base_df
