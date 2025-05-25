@@ -29,9 +29,9 @@ class Command(BaseCommand):
 
         # Define expected Excel column names (adjust if they are slightly different in the file)
         col_swift_code = "SWIFT Code"
-        col_libelle_projet_excel = "Libelle Projet"  # Name in Excel
+        col_libelle_projet_excel = "Libelle Projet "  # Name in Excel
         col_comment_excel = "Comment"
-        col_customer_name_excel = "Customer name"
+        col_customer_name_excel = "Customer Name"
 
         # Verify necessary columns exist
         required_cols = [col_swift_code, col_libelle_projet_excel, col_comment_excel, col_customer_name_excel]
@@ -42,19 +42,26 @@ class Command(BaseCommand):
         for index, row in df.iterrows():
             try:
                 otp_l2_value = str(row[col_swift_code]).strip()
-                if not otp_l2_value or pd.isna(row[col_swift_code]):
-                    self.stdout.write(self.style.WARNING(f"Skipping row {index+2} due to empty SWIFT Code."))
+                # Keep skipping if otp_l2 (primary lookup key) is essentially empty
+                if not otp_l2_value or otp_l2_value.lower() == 'nan' or pd.isna(row[col_swift_code]):
+                    self.stdout.write(self.style.WARNING(f"Skipping row {index+2} due to empty or invalid SWIFT Code: '{row[col_swift_code]}'"))
                     continue
 
-                libelle_projet_value = str(row[col_libelle_projet_excel]).strip() if pd.notna(row[col_libelle_projet_excel]) else None
+                # For Libelle Projet: fallback to "" if Excel cell is empty/NaN
+                libelle_projet_value = str(row[col_libelle_projet_excel]).strip() if pd.notna(row[col_libelle_projet_excel]) else ""
+                if libelle_projet_value.lower() == 'nan':  # Catch if str(np.nan) or similar became "nan"
+                    libelle_projet_value = ""
 
+                # Comment to code_type logic (already handles empty by defaulting, which is good)
                 comment_value_excel = str(row[col_comment_excel]).strip() if pd.notna(row[col_comment_excel]) else ""
-
-                code_type_value_db = Mission.CODE_FRANCE  # Default to 'Code France'
-                if comment_value_excel.upper() == 'CODE DES':  # Case-insensitive check for "Code DES"
+                code_type_value_db = Mission.CODE_FRANCE  # Default
+                if comment_value_excel.upper() == 'CODE DES':
                     code_type_value_db = Mission.CODE_DES
 
-                belgian_name_value = str(row[col_customer_name_excel]).strip() if pd.notna(row[col_customer_name_excel]) else None
+                # For Customer name (mapping to belgian_name): fallback to "" if Excel cell is empty/NaN
+                belgian_name_value = str(row[col_customer_name_excel]).strip() if pd.notna(row[col_customer_name_excel]) else ""
+                if belgian_name_value.lower() == 'nan':  # Catch if str(np.nan) or similar became "nan"
+                    belgian_name_value = ""
 
                 mission, created = Mission.objects.update_or_create(
                     otp_l2=otp_l2_value,
