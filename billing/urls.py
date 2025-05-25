@@ -13,4 +13,5 @@ urlpatterns = [
     path('missions/<int:pk>/delete/', views.mission_delete, name='mission_delete'),
     path('missions/tracking/', views.mission_calculation_tracking_view, name='mission_calculation_tracking'),
     path('facturation/slr/', views.facturation_slr, name='facturation_slr'),
+    path('missions/bulk-delete/', views.mission_bulk_delete, name='mission_bulk_delete'),
 ] 

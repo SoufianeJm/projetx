@@ -423,3 +423,13 @@ def facturation_slr(request):
         'processing_logs': processing_logs
     }
     return render(request, 'billing/facturation_slr.html', context)
+
+@login_required
+def mission_bulk_delete(request):
+    if request.method == 'POST':
+        selected_missions = request.POST.getlist('selected_missions')
+        if selected_missions:
+            Mission.objects.filter(id__in=selected_missions).delete()
+            messages.success(request, f'Successfully deleted {len(selected_missions)} mission(s).')
+        return redirect('mission_list')
+    return redirect('mission_list')
