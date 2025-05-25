@@ -45,47 +45,39 @@
     </div>
 </div>
 
-<!-- Bootstrap 5 Modal for Mission Selection -->
-<div class="modal fade" id="missionSelectModal" tabindex="-1" aria-labelledby="missionSelectModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="missionSelectModalLabel">Select Missions for Adjustment</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        <p class="mb-3">Select the missions below that should have their hours and costs adjusted. Others will be reported with their original values.</p>
-        <div class="table-responsive">
-          <table class="table table-striped table-hover" id="mission-select-table">
-            <thead>
-              <tr>
-                <th>Select</th>
-                <th>OTP L2</th>
-                <th>Libellé de Projet</th>
-                <th>Belgian Name</th>
-                <th>Type de Code</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for mission in missions %}
-              <tr>
-                <td>
-                  <input type="checkbox" class="form-check-input mission-checkbox" value="{{ mission.otp_l2 }}">
-                </td>
-                <td>{{ mission.otp_l2 }}</td>
-                <td>{{ mission.belgian_name }}</td>
-                <td>{{ mission.libelle_de_projet }}</td>
-                <td>{{ mission.get_code_type_display }}</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button type="button" class="btn btn-primary" id="proceedWithCalculationsBtn">Proceed and Generate Report</button>
-      </div>
+<!-- Pure CSS/JS Modal for Mission Selection -->
+<div id="missionSelectModal" class="custom-modal">
+  <div class="custom-modal-content">
+    <span class="custom-modal-close" id="closeMissionModal">&times;</span>
+    <h3>Select Missions for Adjustment</h3>
+    <p>Select the missions below that should have their hours and costs adjusted. Others will be reported with their original values.</p>
+    <div class="table-responsive">
+      <table class="table" id="mission-select-table">
+        <thead>
+          <tr>
+            <th>Select</th>
+            <th>OTP L2</th>
+            <th>Libellé de Projet</th>
+            <th>Belgian Name</th>
+            <th>Type de Code</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for mission in missions %}
+          <tr>
+            <td><input type="checkbox" class="mission-checkbox" value="{{ mission.otp_l2 }}"></td>
+            <td>{{ mission.otp_l2 }}</td>
+            <td>{{ mission.belgian_name }}</td>
+            <td>{{ mission.libelle_de_projet }}</td>
+            <td>{{ mission.get_code_type_display }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div style="text-align:right; margin-top: 1em;">
+      <button type="button" id="closeMissionModalBtn" class="modal-btn">Cancel</button>
+      <button type="button" id="proceedWithCalculationsBtn" class="modal-btn modal-btn-primary">Proceed and Generate Report</button>
     </div>
   </div>
 </div>
@@ -212,23 +204,43 @@
         overflow-x: auto;
     }
     /* Modal Styles */
-    .modal-lg {
+    .custom-modal {
+        display: none;
+        position: fixed;
+        z-index: 10000;
+        left: 0; top: 0; width: 100vw; height: 100vh;
+        overflow: auto;
+        background: rgba(0,0,0,0.5);
+        justify-content: center; align-items: center;
+    }
+    .custom-modal-content {
+        background: #fff;
+        margin: 5% auto;
+        padding: 30px 24px 18px 24px;
+        border-radius: 10px;
+        width: 90%;
         max-width: 900px;
+        position: relative;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+        animation: modalIn 0.2s;
     }
-    .table-responsive {
-        max-height: 60vh;
-        overflow-y: auto;
+    @keyframes modalIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .custom-modal-close {
+        position: absolute; right: 18px; top: 12px; font-size: 2em; color: #888; cursor: pointer;
     }
-    .form-check {
-        padding-left: 0;
+    .custom-modal-close:hover { color: #333; }
+    .modal-btn {
+        padding: 8px 18px; border: none; border-radius: 5px; background: #eee; color: #333; margin-left: 8px; cursor: pointer;
     }
-    .form-check-input {
-        margin-left: 0;
-    }
+    .modal-btn-primary { background: #6d9a1d; color: #fff; }
+    .modal-btn-primary:hover { background: #4e6e13; }
+    .table-responsive { max-height: 50vh; overflow-y: auto; }
+    .table { width: 100%; border-collapse: collapse; }
+    .table th, .table td { border: 1px solid #ddd; padding: 6px 10px; }
+    .table th { background: #f5f5f5; }
 </style>
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 function handleFileChange(input, type) {
     const preview = document.getElementById(type + '-preview');
@@ -265,21 +277,32 @@ Array.from(document.getElementsByClassName('custom-file-input-wrapper')).forEach
 document.addEventListener('DOMContentLoaded', function() {
     const generateReportBtn = document.getElementById('generateReportBtn');
     const slrUploadForm = document.getElementById('slrUploadForm');
-    const missionSelectModal = new bootstrap.Modal(document.getElementById('missionSelectModal'));
+    const modal = document.getElementById('missionSelectModal');
+    const closeModalX = document.getElementById('closeMissionModal');
+    const closeModalBtn = document.getElementById('closeMissionModalBtn');
     const proceedBtn = document.getElementById('proceedWithCalculationsBtn');
 
+    // Show modal
     generateReportBtn.addEventListener('click', function(event) {
         event.preventDefault();
-        // Validate files
         const mafeFile = slrUploadForm.querySelector('input[name="mafe_report_file"]').files.length;
         const heuresFile = slrUploadForm.querySelector('input[name="heures_ibm_file"]').files.length;
         if (!mafeFile || !heuresFile) {
             alert('Please select both MAFE report and Heures IBM files.');
             return;
         }
-        missionSelectModal.show();
+        modal.style.display = 'flex';
     });
 
+    // Hide modal
+    function closeModal() { modal.style.display = 'none'; }
+    closeModalX.onclick = closeModal;
+    closeModalBtn.onclick = closeModal;
+    window.onclick = function(event) {
+        if (event.target === modal) closeModal();
+    };
+
+    // Proceed and submit
     proceedBtn.addEventListener('click', function() {
         // Remove any existing hidden inputs
         slrUploadForm.querySelectorAll('input[type="hidden"][name="selected_otp_l2_codes"]').forEach(input => input.remove());
@@ -291,7 +314,7 @@ document.addEventListener('DOMContentLoaded', function() {
             hiddenInput.value = checkbox.value;
             slrUploadForm.appendChild(hiddenInput);
         });
-        missionSelectModal.hide();
+        closeModal();
         slrUploadForm.submit();
     });
 });
