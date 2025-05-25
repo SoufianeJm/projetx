@@ -212,14 +212,13 @@ def facturation_slr(request):
                 employee_summary_df['Total'] = employee_summary_df['Total Heures'] * employee_summary_df['Rate']
                 employee_summary_df['Total DES'] = employee_summary_df['Total Heures'] * employee_summary_df['Rate DES']
 
-                # Filter out rows where Total Heures is 0
-                initial_rows = len(employee_summary_df)
-                employee_summary_df = employee_summary_df[employee_summary_df['Total Heures'] != 0].copy()
-                filtered_rows = initial_rows - len(employee_summary_df)
-                if filtered_rows > 0:
-                    processing_logs.append(f"INFO: Filtered out {filtered_rows} rows from Employee Summary where 'Total Heures' is 0. Remaining rows: {len(employee_summary_df)}")
+                # Initial filtering of employee_summary_df
+                processing_logs.append(f"DEBUG: employee_summary_df before 'Total Heures != 0' filter: {len(employee_summary_df)} rows.")
+                if 'Total Heures' in employee_summary_df.columns:
+                    employee_summary_df = employee_summary_df[employee_summary_df['Total Heures'] != 0].copy()
+                    processing_logs.append(f"DEBUG: employee_summary_df after 'Total Heures != 0' filter: {len(employee_summary_df)} rows.")
                 else:
-                    processing_logs.append(f"INFO: No rows with 'Total Heures' equal to 0 found in Employee Summary.")
+                    processing_logs.append("WARNING: 'Total Heures' column not found in employee_summary_df for critical early filtering.")
 
                 processing_logs.append(f"INFO: Employee summary created. Sample:<div class='log-table-sample'>{employee_summary_df.head(1).to_html(classes='table table-sm table-bordered table-striped my-2 log-table-sample-width', index=False, border=0)}</div>")
 
@@ -264,6 +263,7 @@ def facturation_slr(request):
                     employee_summary_df.groupby('Libelle projet', as_index=False)
                     .agg({'Total Heures': 'sum', 'Total': 'sum', 'Total DES': 'sum'})
                 )
+                processing_logs.append(f"DEBUG: summary_by_proj_df created with {len(summary_by_proj_df)} rows.")
 
                 # --- global_summary_df ---
                 global_summary_df = pd.merge(
@@ -273,7 +273,7 @@ def facturation_slr(request):
                 )
                 global_summary_df[['Total Heures', 'Total', 'Total DES']] = global_summary_df[['Total Heures', 'Total', 'Total DES']].fillna(0)
                 global_summary_df['Estimees'] = pd.to_numeric(global_summary_df['Estimees'].astype(str).str.strip().replace(['', '-', 'nan', 'None'], '0'), errors='coerce').fillna(0)
-                processing_logs.append(f"INFO: Global summary created. Sample:<div class='log-table-sample'>{global_summary_df.head(1).to_html(classes='table table-sm table-bordered table-striped my-2 log-table-sample-width', index=False, border=0)}</div>")
+                processing_logs.append(f"DEBUG: global_summary_df created with {len(global_summary_df)} rows.")
 
                 # --- adjusted_df ---
                 adjusted_df = pd.merge(
@@ -294,7 +294,7 @@ def facturation_slr(request):
                 adjusted_df['ID'] = adjusted_df['Nom'].astype(str) + ' - ' + adjusted_df['Libelle projet'].astype(str)
                 cols = ['ID'] + [col for col in adjusted_df.columns if col != 'ID']
                 adjusted_df = adjusted_df[cols]
-                processing_logs.append(f"INFO: Adjusted calculations complete. Sample:<div class='log-table-sample'>{adjusted_df.head(1).to_html(classes='table table-sm table-bordered table-striped my-2 log-table-sample-width', index=False, border=0)}</div>")
+                processing_logs.append(f"DEBUG: adjusted_df created with {len(adjusted_df)} rows.")
 
                 # --- result_df ---
                 result_df = (
@@ -303,7 +303,7 @@ def facturation_slr(request):
                     .merge(global_summary_df[['Libelle projet', 'Estimees']], on='Libelle projet', how='left')
                 )
                 result_df['Ecart'] = result_df['Estimees'] - result_df['Adjusted Cost']
-                processing_logs.append(f"INFO: Final result summary created. Sample:<div class='log-table-sample'>{result_df.head(1).to_html(classes='table table-sm table-bordered table-striped my-2 log-table-sample-width', index=False, border=0)}</div>")
+                processing_logs.append(f"DEBUG: result_df created with {len(result_df)} rows.")
 
                 # --- Rounding ---
                 for df in [employee_summary_df, global_summary_df, adjusted_df, result_df]:
@@ -318,6 +318,12 @@ def facturation_slr(request):
                     int_format = workbook.add_format({'num_format': '0'})
 
                     def write(df, sheet, selected_cols=None):
+                        # Final filtering check before writing to Excel
+                        if 'Total Heures' in df.columns:
+                            processing_logs.append(f"DEBUG: {sheet} before final filter: {len(df)} rows")
+                            df = df[df['Total Heures'] != 0].copy()
+                            processing_logs.append(f"DEBUG: {sheet} after final filter: {len(df)} rows")
+                        
                         if selected_cols:
                             df = df[selected_cols]
                         df.to_excel(writer, sheet_name=sheet, index=False, startrow=1, header=False)
@@ -332,6 +338,7 @@ def facturation_slr(request):
                             'columns': [{'header': c} for c in df.columns]
                         })
 
+                    # Write each sheet with final filtering
                     write(base_df[['Date', 'Code projet', 'Nom', 'Grade from File', 'Heures', 'Libelle projet']], '00_Base')
                     write(employee_summary_df[['Libelle projet', 'Nom', 'Grade from File', 'Total Heures', 'Rate', 'Rate DES', 'Total', 'Total DES']], '01_Employee_Summary')
                     write(global_summary_df[['Libelle projet', 'Total Heures', 'Total', 'Total DES', 'Estimees']], '02_Global_Summary')
