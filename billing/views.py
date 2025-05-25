@@ -157,6 +157,9 @@ def facturation_slr(request):
         form = SLRFileUploadForm(request.POST, request.FILES)
         selected_libelle_projet = request.POST.getlist('selected_libelle_projet')
 
+        # Debug: log all files in request.FILES
+        processing_logs.append('FILES received: ' + ', '.join(f'{k}: {v.name}' for k, v in request.FILES.items()))
+
         # Only require files if this is the first POST (no missions selected yet)
         if not selected_libelle_projet:
             heures_ibm_file_obj = request.FILES.get('heures_ibm_file')
@@ -194,6 +197,8 @@ def facturation_slr(request):
                 # Process MAFE report file (mimic main.py logic)
                 mafe_file_obj.seek(0)
                 mafe_raw = pd.read_excel(mafe_file_obj, header=None)
+                # Log the first 20 rows for debugging
+                processing_logs.append('<b>First 20 rows of MAFE file:</b><br><pre>' + '\n'.join(str(list(mafe_raw.iloc[i].values)) for i in range(min(20, len(mafe_raw)))) + '</pre>')
                 header_row_idx = None
                 for i in range(min(20, len(mafe_raw))):
                     row = mafe_raw.iloc[i].astype(str).str.lower().str.strip()
