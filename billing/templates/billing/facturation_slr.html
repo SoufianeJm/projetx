@@ -56,10 +56,7 @@
         <thead>
           <tr>
             <th>Select</th>
-            <th>OTP L2</th>
             <th>Libellé de Projet</th>
-            <th>Belgian Name</th>
-            <th>Type de Code</th>
           </tr>
         </thead>
         <tbody>
@@ -283,19 +280,18 @@ document.addEventListener('DOMContentLoaded', function() {
     function showMissionModal(filteredOtps) {
         // Filter missions to only those in filteredOtps
         const filteredMissions = allMissions.filter(m => filteredOtps.includes(m.otp_l2));
+        // Get unique Libellé de Projet values
+        const uniqueLibelles = Array.from(new Set(filteredMissions.map(m => m.libelle_de_projet)));
         // Populate table
         missionTableBody.innerHTML = '';
-        if (filteredMissions.length === 0) {
-            missionTableBody.innerHTML = '<tr><td colspan="5">No missions found in the Heures IBM file.</td></tr>';
+        if (uniqueLibelles.length === 0) {
+            missionTableBody.innerHTML = '<tr><td colspan="2">No missions found in the Heures IBM file.</td></tr>';
         } else {
-            filteredMissions.forEach(mission => {
+            uniqueLibelles.forEach(libelle => {
                 const row = document.createElement('tr');
                 row.innerHTML = `
-                  <td><input type="checkbox" class="mission-checkbox" value="${mission.otp_l2}"></td>
-                  <td>${mission.otp_l2}</td>
-                  <td>${mission.belgian_name}</td>
-                  <td>${mission.libelle_de_projet}</td>
-                  <td>${mission.code_type_display}</td>
+                  <td><input type="checkbox" class="mission-checkbox" value="${libelle}"></td>
+                  <td>${libelle}</td>
                 `;
                 missionTableBody.appendChild(row);
             });
@@ -350,11 +346,11 @@ document.addEventListener('DOMContentLoaded', function() {
     proceedBtn.addEventListener('click', function() {
         // Remove any existing hidden inputs
         slrUploadForm.querySelectorAll('input[type="hidden"][name="selected_otp_l2_codes"]').forEach(input => input.remove());
-        // Add hidden inputs for selected missions
+        // Add hidden inputs for selected libelles
         document.querySelectorAll('.mission-checkbox:checked').forEach(checkbox => {
             const hiddenInput = document.createElement('input');
             hiddenInput.type = 'hidden';
-            hiddenInput.name = 'selected_otp_l2_codes';
+            hiddenInput.name = 'selected_libelle_projet';
             hiddenInput.value = checkbox.value;
             slrUploadForm.appendChild(hiddenInput);
         });
