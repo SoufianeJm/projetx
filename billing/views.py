@@ -365,6 +365,10 @@ def facturation_slr(request):
                 sample_cols = [c for c in sample_cols if c in adjusted_df.columns]
                 processing_logs.append("<b>Sample of adjusted_df after final_coeff calculation:</b><div class='log-table-sample'>" + adjusted_df[sample_cols].head(8).to_html(index=False) + "</div>")
 
+                # Debug: log columns before groupby
+                processing_logs.append(f"base_df columns: {list(base_df.columns)}")
+                processing_logs.append(f"adjusted_df columns: {list(adjusted_df.columns)}")
+
                 # --- Excel Output Block ---
                 try:
                     output = BytesIO()
