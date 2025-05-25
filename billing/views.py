@@ -427,9 +427,31 @@ def facturation_slr(request):
 @login_required
 def mission_bulk_delete(request):
     if request.method == 'POST':
-        selected_missions = request.POST.getlist('selected_missions')
-        if selected_missions:
-            Mission.objects.filter(id__in=selected_missions).delete()
-            messages.success(request, f'Successfully deleted {len(selected_missions)} mission(s).')
-        return redirect('mission_list')
+        try:
+            selected_missions = request.POST.getlist('selected_missions')
+            print(f"DEBUG: Received POST request for bulk delete. Selected missions: {selected_missions}")
+            
+            if not selected_missions:
+                print("DEBUG: No missions selected for deletion")
+                messages.warning(request, 'No missions were selected for deletion.')
+                return redirect('mission_list')
+            
+            # Verify the missions exist before deletion
+            existing_missions = Mission.objects.filter(id__in=selected_missions)
+            print(f"DEBUG: Found {existing_missions.count()} existing missions to delete")
+            
+            if existing_missions.exists():
+                existing_missions.delete()
+                print(f"DEBUG: Successfully deleted {existing_missions.count()} missions")
+                messages.success(request, f'Successfully deleted {existing_missions.count()} mission(s).')
+            else:
+                print("DEBUG: No existing missions found to delete")
+                messages.warning(request, 'No valid missions were found to delete.')
+        except Exception as e:
+            print(f"ERROR: Exception during bulk delete: {str(e)}")
+            messages.error(request, f'An error occurred while deleting missions: {str(e)}')
+    else:
+        print("DEBUG: Non-POST request received for bulk delete")
+        messages.warning(request, 'Invalid request method.')
+    
     return redirect('mission_list')
