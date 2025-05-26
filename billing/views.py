@@ -221,13 +221,7 @@ def facturation_slr(request):
             consultants_df['Rate DES'] = pd.to_numeric(consultants_df['Rate DES'], errors='coerce').fillna(0)
             processing_logs.append("DEBUG: Consultants data prepared")
 
-            # 4. Prepare MAFE file - already loaded
-            mafe = mafe_df.copy()
-            mafe.columns = mafe.iloc[14].astype(str).str.strip().str.replace('\n', ' ').str.replace('\r', ' ')
-            mafe = mafe.drop(index=list(range(0, 15))).reset_index(drop=True)
-            processing_logs.append("DEBUG: MAFE data prepared")
-
-            # 5. Find forecast column in MAFE
+            # 4. Prepare MAFE file - match main.py logic
             mois_mapping = {
                 'Janvier': 'Jan', 'Février': 'Feb', 'Mars': 'Mar', 'Avril': 'Apr', 'Mai': 'May', 'Juin': 'Jun',
                 'Juillet': 'Jul', 'Août': 'Aug', 'Septembre': 'Sep', 'Octobre': 'Oct', 'Novembre': 'Nov', 'Décembre': 'Dec',
@@ -238,6 +232,21 @@ def facturation_slr(request):
             mois = mois_mapping.get(match.group(1), match.group(1)) if match else ''
             annee = match.group(2) if match else ''
             processing_logs.append(f"DEBUG: Month and year extracted: {mois} {annee}")
+
+            # Find forecast column in MAFE
+            forecast_col_cleaned = next((col for col in mafe_df.columns if mois in col and 'Forecasts' in col and annee[-2:] in col), None)
+            if forecast_col_cleaned:
+                mafe_subset = mafe_df[['Country', 'Customer Name', forecast_col_cleaned]].rename(columns={forecast_col_cleaned: 'Estimees'})
+                # Get Belgian Name mapping from Mission model
+                belgian_names = Mission.objects.values('belgian_name', 'libelle_de_projet')
+                belgian_names_df = pd.DataFrame(list(belgian_names))
+                if not belgian_names_df.empty:
+                    belgian_names_df = belgian_names_df.rename(columns={'belgian_name': 'Customer Name', 'libelle_de_projet': 'Libelle projet'})
+                    mafe_subset = mafe_subset.merge(belgian_names_df, on='Customer Name', how='left')
+                mafe_subset['Libelle projet'] = mafe_subset['Libelle projet'].fillna(mafe_subset['Customer Name'])
+            else:
+                mafe_subset = pd.DataFrame(columns=["Country", "Customer Name", "Libelle projet", "Estimees"])
+            processing_logs.append("DEBUG: MAFE data prepared with forecast column")
 
             # 6. Employee summary
             processing_logs.append("DEBUG: Starting employee summary calculations")
@@ -252,7 +261,7 @@ def facturation_slr(request):
             processing_logs.append("DEBUG: Employee summary calculated")
 
             summary_by_proj = employee_summary.groupby('Libelle projet', as_index=False).agg({'Total Heures': 'sum', 'Total': 'sum', 'Total DES': 'sum'})
-            global_summary = pd.merge(mafe[['Libelle projet', 'Estimees']].drop_duplicates(), summary_by_proj, on='Libelle projet', how='left')
+            global_summary = pd.merge(mafe_subset[['Libelle projet', 'Estimees']].drop_duplicates(), summary_by_proj, on='Libelle projet', how='left')
             global_summary[['Total Heures', 'Total', 'Total DES']] = global_summary[['Total Heures', 'Total', 'Total DES']].fillna(0)
             global_summary['Estimees'] = pd.to_numeric(global_summary['Estimees'].astype(str).str.strip().replace(['', '-', 'nan', 'None'], '0'), errors='coerce').fillna(0)
             processing_logs.append("DEBUG: Global summary calculated")
