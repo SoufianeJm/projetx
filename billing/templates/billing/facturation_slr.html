@@ -2,7 +2,9 @@
 {% load crispy_forms_tags %}
 
 {% block title %}Facturation SLR{% endblock %}
-{% block page_title %}Facturation SLR{% endblock %}
+{% block page_title %}
+    <span class="page-title">Facturation SLR</span>
+{% endblock %}
 
 {% block content %}
 <div class="facturation-wrapper">
@@ -22,64 +24,248 @@
             </div>
         {% endif %}
 
-        <form method="post" enctype="multipart/form-data" id="slrForm">
+        <form method="post" enctype="multipart/form-data" id="slrForm" class="modern-form">
             {% csrf_token %}
-            {{ form|crispy }}
-            <button type="submit" name="submit" class="btn btn-primary mt-3" id="generateReportBtn">
-                <i class="fas fa-file-excel me-2"></i>Generate Report
-            </button>
+            <div class="form-group">
+                <label for="id_mafe_report_file" class="form-label">DTT IMT France MAFE Report (xlsx)</label>
+                <input type="file" name="mafe_report_file" id="id_mafe_report_file" class="form-control file-input" accept=".xlsx">
+            </div>
+            <div class="form-group">
+                <label for="id_heures_ibm_file" class="form-label">Heures IBM (xlsx)</label>
+                <input type="file" name="heures_ibm_file" id="id_heures_ibm_file" class="form-control file-input" accept=".xlsx">
+            </div>
+            <div class="form-actions">
+                <button type="submit" name="submit" class="btn btn-primary mt-3" id="generateReportBtn">
+                    <i class="fas fa-file-excel me-2"></i>Generate Report
+                </button>
+            </div>
         </form>
     </div>
 </div>
 
 <style>
+    body {
+        font-family: 'Inter', -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        background: var(--bg-light, #f4f6f8);
+    }
     .facturation-wrapper {
         display: flex;
         justify-content: center;
         align-items: flex-start;
-        min-height: 60vh;
-        padding: 32px 0;
+        min-height: 70vh;
+        padding: 48px 0;
+        background: linear-gradient(120deg, #f4f6f8 60%, #e9f7df 100%);
     }
     .facturation-card {
-        background: #ffffff;
-        border-radius: 14px;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-        padding: 36px 32px 32px 32px;
-        max-width: 800px;
+        background: #fff;
+        border-radius: 18px;
+        box-shadow: 0 6px 32px rgba(128, 195, 66, 0.10), 0 1.5px 6px rgba(52,58,64,0.06);
+        padding: 44px 40px 36px 40px;
+        max-width: 480px;
         width: 100%;
         margin: 0 auto;
+        position: relative;
+        animation: fadeInUp 0.7s cubic-bezier(.23,1.01,.32,1) 0s;
     }
-    .btn {
-        padding: 10px 20px;
-        font-weight: 600; 
-        border-radius: 6px;
-        transition: all 0.2s;
+    @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(40px); }
+        to { opacity: 1; transform: translateY(0); }
     }
-    .btn-primary {
-        background: var(--primary-color);
-        border: none;
-    }
-    .btn-primary:hover {
-        background: #6d9a1d;
-    }
-    .btn-success {
-        background: #28a745;
-        border: none;
-    }
-    .btn-success:hover {
-        background: #218838;
+    .facturation-card h2, .facturation-card h4, .facturation-card label {
+        font-family: inherit;
     }
     .alert {
-        border-radius: 8px;
-        padding: 1.25rem;
+        border-radius: 10px;
+        padding: 1.5rem 1.25rem;
+        font-size: 1.1rem;
+        margin-bottom: 0;
+        box-shadow: 0 2px 8px rgba(128, 195, 66, 0.08);
+        animation: fadeIn 0.5s;
+    }
+    @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
     }
     .alert-success {
-        background-color: #d4edda;
-        border-color: #c3e6cb;
-        color: #155724;
+        background: linear-gradient(90deg, #e9f7df 80%, #d4edda 100%);
+        border: 1.5px solid #b7e4c7;
+        color: #2e7d32;
+        font-weight: 600;
+    }
+    .d-flex {
+        display: flex;
+        align-items: center;
     }
     .gap-3 {
-        gap: 1rem;
+        gap: 1.2rem;
+    }
+    .mt-3 { margin-top: 1.5rem; }
+    .mb-4 { margin-bottom: 2rem; }
+    .facturation-card form {
+        margin-top: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    .modern-form {
+        margin-top: 1.5rem;
+    }
+    .form-group {
+        margin-bottom: 1.5em;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .form-label {
+        font-weight: 600;
+        color: #343a40;
+        margin-bottom: 0.5em;
+        font-size: 1.08rem;
+        font-family: Inter, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    }
+    .form-control {
+        border-radius: 7px;
+        border: 1.5px solid #e9ecef;
+        font-size: 1.08rem;
+        padding: 10px 14px;
+        background: #f8fafc;
+        transition: border-color 0.2s;
+        box-shadow: none;
+        font-family: Inter, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        color: #222;
+        width: 100%;
+    }
+    .form-control:focus {
+        border-color: var(--primary-color, #80C342);
+        background: #fff;
+    }
+    .file-input {
+        padding: 10px 14px;
+        background: #f8fafc;
+        border-radius: 7px;
+        border: 1.5px solid #e9ecef;
+        font-size: 1.08rem;
+        color: #343a40;
+        cursor: pointer;
+        transition: border-color 0.2s;
+    }
+    .file-input:focus {
+        border-color: var(--primary-color, #80C342);
+        background: #fff;
+    }
+    .file-input::-webkit-file-upload-button {
+        background: var(--primary-color, #80C342);
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        padding: 8px 18px;
+        font-weight: 600;
+        font-family: Inter, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+    .file-input:hover::-webkit-file-upload-button,
+    .file-input:focus::-webkit-file-upload-button {
+        background: #6d9a1d;
+    }
+    .file-input::file-selector-button {
+        background: var(--primary-color, #80C342);
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        padding: 8px 18px;
+        font-weight: 600;
+        font-family: Inter, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+    .file-input:hover::file-selector-button,
+    .file-input:focus::file-selector-button {
+        background: #6d9a1d;
+    }
+    .btn {
+        padding: 12px 28px;
+        font-weight: 600;
+        border-radius: 8px;
+        font-size: 1.08rem;
+        transition: all 0.18s cubic-bezier(.23,1.01,.32,1);
+        box-shadow: 0 2px 8px rgba(128, 195, 66, 0.07);
+        border: none;
+        outline: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5em;
+    }
+    .btn-primary {
+        background: linear-gradient(90deg, var(--primary-color, #80C342) 80%, #aee571 100%);
+        color: #fff;
+    }
+    .btn-primary:hover, .btn-primary:focus {
+        background: linear-gradient(90deg, #6d9a1d 80%, #aee571 100%);
+        color: #fff;
+        transform: translateY(-2px) scale(1.03);
+        box-shadow: 0 4px 16px rgba(128, 195, 66, 0.13);
+    }
+    .btn-success {
+        background: linear-gradient(90deg, #28a745 80%, #80C342 100%);
+        color: #fff;
+    }
+    .btn-success:hover, .btn-success:focus {
+        background: linear-gradient(90deg, #218838 80%, #80C342 100%);
+        color: #fff;
+        transform: translateY(-2px) scale(1.03);
+        box-shadow: 0 4px 16px rgba(40, 167, 69, 0.13);
+    }
+    .btn:active {
+        transform: scale(0.98);
+    }
+    .form-actions {
+        margin-top: 2em;
+        display: flex;
+        gap: 1em;
+    }
+    .form-actions .btn {
+        min-width: 120px;
+    }
+    .form-actions .btn-cancel {
+        background: #e9ecef;
+        color: #343a40;
+    }
+    .form-actions .btn-cancel:hover {
+        background: #d6d8db;
+    }
+    .form-actions .btn-primary {
+        margin-right: 0.5em;
+    }
+    .form-group input[type="file"] {
+        background: #fff;
+        border: 1.5px solid #e9ecef;
+        border-radius: 7px;
+        padding: 8px 10px;
+    }
+    .form-group input[type="file"]:focus {
+        border-color: var(--primary-color, #80C342);
+    }
+    .form-group .error-message {
+        color: #c0392b;
+        font-size: 0.98em;
+        margin-top: 0.3em;
+    }
+    .page-title {
+        font-size: 2.1rem;
+        font-weight: 700;
+        color: var(--primary-color, #80C342);
+        letter-spacing: 1px;
+        margin-bottom: 0.5em;
+        text-align: center;
+        text-shadow: 0 2px 8px rgba(128, 195, 66, 0.08);
+    }
+    @media (max-width: 600px) {
+        .facturation-card {
+            padding: 18px 8px 18px 8px;
+        }
+        .btn {
+            padding: 10px 16px;
+            font-size: 1em;
+        }
     }
 </style>
 
