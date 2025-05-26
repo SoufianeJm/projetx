@@ -505,6 +505,13 @@ def edit_slr_adjustments(request, run_id):
         global_summary = pd.read_parquet(run_dir / 'global_summary_initial.parquet')
         result = pd.read_parquet(run_dir / 'result_initial.parquet')
 
+        # Remove technical columns from display
+        display_columns = [col for col in adjusted_df.columns if col not in [
+            'Total_Projet_Cout', 'coeff_total', 'total_rate_proj', 
+            'priority_coeff', 'final_coeff'
+        ]]
+        display_df = adjusted_df[display_columns]
+
         if request.method == 'POST':
             # Handle form submission for adjustments
             try:
@@ -583,9 +590,9 @@ def edit_slr_adjustments(request, run_id):
         context = {
             'page_title': 'Edit SLR Adjustments',
             'run_id': run_id,
-            'adjusted_df': adjusted_df.to_dict('records'),
-            'columns': adjusted_df.columns.tolist(),
-            'total_rows': len(adjusted_df),
+            'adjusted_df': display_df.to_dict('records'),
+            'columns': display_df.columns.tolist(),
+            'total_rows': len(display_df),
             'original_filename': request.session.get('last_slr_run_heures_filename', 'Unknown')
         }
         return render(request, 'billing/edit_slr_adjustments.html', context)
