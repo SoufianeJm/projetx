@@ -152,16 +152,16 @@ def find_otp_l2_column(df):
 def facturation_slr(request):
     processing_logs = []
     form = SLRFileUploadForm()
+    current_step = 1
 
     if request.method == 'POST':
-        form = SLRFileUploadForm(request.POST, request.FILES)
-        selected_libelle_projet = request.POST.getlist('selected_libelle_projet')
+        # Handle Step 1: File Upload
+        if 'submit_step_1' in request.POST:
+            form = SLRFileUploadForm(request.POST, request.FILES)
+            
+            # Debug: log all files in request.FILES
+            processing_logs.append('FILES received: ' + ', '.join(f'{k}: {v.name}' for k, v in request.FILES.items()))
 
-        # Debug: log all files in request.FILES
-        processing_logs.append('FILES received: ' + ', '.join(f'{k}: {v.name}' for k, v in request.FILES.items()))
-
-        # Only require files if this is the first POST (no missions selected yet)
-        if not selected_libelle_projet:
             heures_ibm_file_obj = request.FILES.get('heures_ibm_file')
             mafe_file_obj = request.FILES.get('mafe_report_file')
 
@@ -181,85 +181,86 @@ def facturation_slr(request):
                 context = {
                     'form': form,
                     'missions': [],
-                    'show_modal': False,
+                    'current_step': current_step,
                     'processing_logs': processing_logs,
                     'page_title': 'Facturation SLR',
                 }
                 return render(request, 'billing/facturation_slr.html', context)
 
-            # 1. Modal trigger: show modal with all candidate missions
             try:
                 # Process Heures IBM file
                 heures_ibm_file_obj.seek(0)
                 base_df = pd.read_excel(heures_ibm_file_obj, sheet_name='base', usecols="E,H,I,M,N")
                 base_df.columns = ['Code projet', 'Nom', 'Grade', 'Date', 'Heures']
                 processing_logs.append(f"INFO: Heures IBM file parsed. base_df shape: {base_df.shape}")
-                # Process MAFE report file EXACTLY like main.py
+
+                # Process MAFE report file
                 mafe_file_obj.seek(0)
                 mafe_raw = pd.read_excel(mafe_file_obj, sheet_name='(Tab A) FULLY COMMITTED', header=None)
                 mafe_raw.columns = mafe_raw.iloc[14].astype(str).str.strip().str.replace('\n', ' ').str.replace('\r', ' ')
                 mafe_df = mafe_raw.drop(index=list(range(0, 15))).reset_index(drop=True)
                 processing_logs.append(f"INFO: MAFE report file parsed. mafe_df shape: {mafe_df.shape}")
 
-                # Get unique codes and get missions (use 'Code projet')
+                # Get unique codes and get missions
                 unique_codes = base_df['Code projet'].dropna().unique().tolist()
                 processing_logs.append(f"INFO: Unique Code projet values extracted: {unique_codes}")
                 missions_from_heures_file = Mission.objects.filter(otp_l2__in=unique_codes)
                 unique_libelles = sorted(set(m.libelle_de_projet for m in missions_from_heures_file if m.libelle_de_projet))
                 processing_logs.append(f"INFO: Candidate missions for adjustment (libelle_de_projet): {unique_libelles}")
 
-                # Store DataFrames in session for later use
-                request.session['base_df'] = base_df.to_json()
-                request.session['mafe_df'] = mafe_df.to_json()
-                print("DEBUG: base_df and mafe_df stored in session")
+                # Store DataFrames and missions in session
+                request.session['base_df_json'] = base_df.to_json()
+                request.session['mafe_df_json'] = mafe_df.to_json()
+                request.session['heures_filename'] = heures_ibm_file_obj.name
+                request.session['all_candidate_libelles_for_step2'] = unique_libelles
 
+                # Move to Step 2
+                current_step = 2
                 context = {
                     'form': form,
                     'missions': unique_libelles,
-                    'show_modal': True,
+                    'current_step': current_step,
                     'processing_logs': processing_logs,
                     'page_title': 'Facturation SLR',
                 }
                 return render(request, 'billing/facturation_slr.html', context)
+
             except Exception as e:
                 processing_logs.append(f"ERROR: Could not parse files: {str(e)}<br><pre>{traceback.format_exc()}</pre>")
                 context = {
                     'form': form,
                     'missions': [],
-                    'show_modal': False,
+                    'current_step': current_step,
                     'processing_logs': processing_logs,
                     'page_title': 'Facturation SLR',
                 }
                 return render(request, 'billing/facturation_slr.html', context)
-        else:
-            # Second POST: do NOT require files, use DataFrames from session
-            print("DEBUG: base_df in session:", 'base_df' in request.session)
-            print("DEBUG: mafe_df in session:", 'mafe_df' in request.session)
-            # 2. Modal submit: determine target missions for adjustment
-            target_mission_libelles_for_adjustment = []
+
+        # Handle Step 2: Mission Selection & Report Generation
+        elif 'submit_step_2' in request.POST:
+            current_step = 2
             try:
                 # Retrieve DataFrames from session
-                base_df = pd.read_json(request.session.get('base_df', '{}'))
-                mafe_df = pd.read_json(request.session.get('mafe_df', '{}'))
-                if base_df.empty or mafe_df.empty:
-                    raise ValueError("Session data for DataFrames is missing or invalid")
-                processing_logs.append(f"INFO: Retrieved DataFrames from session. base_df shape: {base_df.shape}, mafe_df shape: {mafe_df.shape}")
+                base_df_json = request.session.get('base_df_json')
+                mafe_df_json = request.session.get('mafe_df_json')
+                heures_filename = request.session.get('heures_filename')
+                all_candidate_libelles = request.session.get('all_candidate_libelles_for_step2')
 
-                # Get unique codes and missions (use 'Code projet')
-                unique_codes = base_df['Code projet'].dropna().unique().tolist()
-                missions_from_heures_file = Mission.objects.filter(otp_l2__in=unique_codes)
-                all_candidate_libelles = sorted(set(m.libelle_de_projet for m in missions_from_heures_file if m.libelle_de_projet))
+                if not all([base_df_json, mafe_df_json, heures_filename, all_candidate_libelles]):
+                    messages.error(request, "Session expired or data missing. Please start over.")
+                    # Clear session data
+                    for key in ['base_df_json', 'mafe_df_json', 'heures_filename', 'all_candidate_libelles_for_step2']:
+                        request.session.pop(key, None)
+                    return redirect('facturation_slr')
 
-                # Handle mission selection
-                user_selected_libelles = selected_libelle_projet
-                processing_logs.append(f"INFO: user_selected_libelles from modal: {user_selected_libelles}")
-                if user_selected_libelles:
-                    target_mission_libelles_for_adjustment = user_selected_libelles
-                    processing_logs.append(f"INFO: User selected missions for adjustment: {user_selected_libelles}")
-                else:
-                    target_mission_libelles_for_adjustment = all_candidate_libelles
-                    processing_logs.append(f"INFO: No missions selected in modal, so all eligible missions will be adjusted: {all_candidate_libelles}")
-                processing_logs.append(f"INFO: Final target_mission_libelles_for_adjustment: {target_mission_libelles_for_adjustment}")
+                # Convert JSON back to DataFrames
+                base_df = pd.read_json(base_df_json)
+                mafe_df = pd.read_json(mafe_df_json)
+
+                # Get selected missions
+                user_selected_libelles = request.POST.getlist('selected_libelle_projet')
+                target_mission_libelles_for_adjustment = user_selected_libelles if user_selected_libelles else all_candidate_libelles
+                processing_logs.append(f"INFO: Target missions for adjustment: {target_mission_libelles_for_adjustment}")
 
                 # --- MATCH main.py LOGIC ---
                 # 1. Prepare base_df (Heures IBM) - already loaded from session
@@ -280,7 +281,7 @@ def facturation_slr(request):
                 consultants_df['Rate'] = pd.to_numeric(consultants_df['Rate'], errors='coerce').fillna(0)
                 consultants_df['Rate DES'] = pd.to_numeric(consultants_df['Rate DES'], errors='coerce').fillna(0)
 
-                # 4. Prepare MAFE file as in main.py - already loaded from session
+                # 4. Prepare MAFE file - already loaded from session
                 mafe = mafe_df.copy()
                 mafe.columns = mafe.iloc[14].astype(str).str.strip().str.replace('\n', ' ').str.replace('\r', ' ')
                 mafe = mafe.drop(index=list(range(0, 15))).reset_index(drop=True)
@@ -292,18 +293,9 @@ def facturation_slr(request):
                     'Jan': 'Jan', 'Feb': 'Feb', 'Mar': 'Mar', 'Apr': 'Apr', 'May': 'May', 'Jun': 'Jun',
                     'Jul': 'Jul', 'Aug': 'Aug', 'Sep': 'Sep', 'Oct': 'Oct', 'Nov': 'Nov', 'Dec': 'Dec'
                 }
-                heures_ibm_file = request.FILES.get('heures_ibm_file')
-                if heures_ibm_file is not None:
-                    match = re.search(r'(Janvier|Février|Mars|Avril|Mai|Juin|Juillet|Août|Septembre|Octobre|Novembre|Décembre|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[^\d]*(\d{2,4})', heures_ibm_file.name)
-                    mois = mois_mapping.get(match.group(1), match.group(1)) if match else ''
-                    annee = match.group(2) if match else ''
-                else:
-                    match = None
-                    mois = ''
-                    annee = ''
-                    print('ERROR: "heures_ibm_file" was not provided in the request.')
-                # Optionally, handle this case as needed (e.g., raise an error, return a response, etc.)
-                    mafe_subset = pd.DataFrame(columns=["Country", "Customer Name", "Libelle projet", "Estimees"])
+                match = re.search(r'(Janvier|Février|Mars|Avril|Mai|Juin|Juillet|Août|Septembre|Octobre|Novembre|Décembre|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[^\d]*(\d{2,4})', heures_filename)
+                mois = mois_mapping.get(match.group(1), match.group(1)) if match else ''
+                annee = match.group(2) if match else ''
 
                 # 6. Employee summary
                 employee_summary = (
@@ -346,76 +338,71 @@ def facturation_slr(request):
                     for col in df.select_dtypes(include='number').columns:
                         df[col] = df[col].round(0)
 
-                # --- Excel Output Block ---
-                try:
-                    output = BytesIO()
-                    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                        workbook = writer.book
-                        header_format = workbook.add_format({'bold': True, 'bg_color': '#D9D2E9'})
-                        int_format = workbook.add_format({'num_format': '0'})
+                # Generate Excel file
+                output = BytesIO()
+                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                    workbook = writer.book
+                    header_format = workbook.add_format({'bold': True, 'bg_color': '#D9D2E9'})
+                    int_format = workbook.add_format({'num_format': '0'})
 
-                        def write(df, sheet, selected_cols=None):
-                            if selected_cols:
-                                df = df[selected_cols]
-                            df.to_excel(writer, sheet_name=sheet, index=False, startrow=1, header=False)
-                            ws = writer.sheets[sheet]
-                            for i, col in enumerate(df.columns):
-                                ws.write(0, i, col, header_format)
-                                width = max(15, len(str(col)) + 2)
-                                ws.set_column(i, i, width, int_format if pd.api.types.is_integer_dtype(df[col]) else None)
-                            ws.add_table(0, 0, len(df), len(df.columns) - 1, {
-                                'name': f'Table_{sheet}',
-                                'style': 'TableStyleLight8',
-                                'columns': [{'header': c} for c in df.columns]
-                            })
+                    def write(df, sheet, selected_cols=None):
+                        if selected_cols:
+                            df = df[selected_cols]
+                        df.to_excel(writer, sheet_name=sheet, index=False, startrow=1, header=False)
+                        ws = writer.sheets[sheet]
+                        for i, col in enumerate(df.columns):
+                            ws.write(0, i, col, header_format)
+                            width = max(15, len(str(col)) + 2)
+                            ws.set_column(i, i, width, int_format if pd.api.types.is_integer_dtype(df[col]) else None)
+                        ws.add_table(0, 0, len(df), len(df.columns) - 1, {
+                            'name': f'Table_{sheet}',
+                            'style': 'TableStyleLight8',
+                            'columns': [{'header': c} for c in df.columns]
+                        })
 
-                        write(base_df[['Date', 'Code projet', 'Nom', 'Grade', 'Heures', 'Libelle projet']], '00_Base')
-                        write(employee_summary, '01_Employee_Summary', ['Libelle projet', 'Nom', 'Grade', 'Total Heures', 'Rate', 'Rate DES', 'Total', 'Total DES'])
-                        write(global_summary, '02_Global_Summary', ['Libelle projet', 'Total Heures', 'Total', 'Total DES', 'Estimees'])
-                        write(adjusted, '03_Adjusted', ['ID', 'Libelle projet', 'Nom', 'Grade', 'Total Heures', 'Rate', 'Total', 'Adjusted Hours', 'Heures Retirées', 'Adjusted Cost'])
-                        write(result, '04_Result')
+                    write(base_df[['Date', 'Code projet', 'Nom', 'Grade', 'Heures', 'Libelle projet']], '00_Base')
+                    write(employee_summary, '01_Employee_Summary', ['Libelle projet', 'Nom', 'Grade', 'Total Heures', 'Rate', 'Rate DES', 'Total', 'Total DES'])
+                    write(global_summary, '02_Global_Summary', ['Libelle projet', 'Total Heures', 'Total', 'Total DES', 'Estimees'])
+                    write(adjusted, '03_Adjusted', ['ID', 'Libelle projet', 'Nom', 'Grade', 'Total Heures', 'Rate', 'Total', 'Adjusted Hours', 'Heures Retirées', 'Adjusted Cost'])
+                    write(result, '04_Result')
 
-                    output.seek(0)
-                    now_str = datetime.now().strftime('%Y%m%d_%H%M%S')
-                    filename = f"SLR_Facturation_{now_str}.xlsx"
-                    processing_logs.append(f"INFO: Excel file generated with sheets: 00_Base, 01_Employee_Summary, 02_Global_Summary, 03_Adjusted, 04_Result")
+                output.seek(0)
+                now_str = datetime.now().strftime('%Y%m%d_%H%M%S')
+                filename = f"SLR_Facturation_{now_str}.xlsx"
+                processing_logs.append(f"INFO: Excel file generated with sheets: 00_Base, 01_Employee_Summary, 02_Global_Summary, 03_Adjusted, 04_Result")
 
-                    response = HttpResponse(
-                        output.getvalue(),
-                        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-                    )
-                    response['Content-Disposition'] = f'attachment; filename="{filename}"'
-                    return response
-                except Exception as e:
-                    processing_logs.append(f"ERROR: Failed to generate Excel file: {str(e)}<br><pre>{traceback.format_exc()}</pre>")
-                    # Fall through to render logs
+                # Clear session data after successful report generation
+                for key in ['base_df_json', 'mafe_df_json', 'heures_filename', 'all_candidate_libelles_for_step2']:
+                    request.session.pop(key, None)
 
-                context = {
-                    'form': form,
-                    'missions': all_candidate_libelles,
-                    'show_modal': False,
-                    'processing_logs': processing_logs,
-                    'page_title': 'Facturation SLR',
-                }
-                return render(request, 'billing/facturation_slr.html', context)
+                response = HttpResponse(
+                    output.getvalue(),
+                    content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                )
+                response['Content-Disposition'] = f'attachment; filename="{filename}"'
+                return response
+
             except Exception as e:
                 processing_logs.append(f"ERROR: Exception during calculation: {str(e)}<br><pre>{traceback.format_exc()}</pre>")
+                # Clear session data on error
+                for key in ['base_df_json', 'mafe_df_json', 'heures_filename', 'all_candidate_libelles_for_step2']:
+                    request.session.pop(key, None)
                 context = {
                     'form': form,
                     'missions': [],
-                    'show_modal': False,
+                    'current_step': current_step,
                     'processing_logs': processing_logs,
                     'page_title': 'Facturation SLR',
                 }
                 return render(request, 'billing/facturation_slr.html', context)
 
-    # fallback for GET or other cases
+    # GET request or fallback
     context = {
         'form': form,
         'page_title': 'Facturation SLR',
         'processing_logs': processing_logs,
         'missions': [],
-        'show_modal': False,
+        'current_step': current_step,
     }
     return render(request, 'billing/facturation_slr.html', context)
 
