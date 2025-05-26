@@ -16,4 +16,5 @@ urlpatterns = [
     path('missions/bulk-delete/', views.mission_bulk_delete, name='mission_bulk_delete'),
     path('facturation/slr/<str:run_id>/download/<str:filename>/', views.download_slr_report, name='download_slr_report'),
     path('facturation/slr/<str:run_id>/edit/', views.edit_slr_adjustments, name='edit_slr_adjustments'),
+    path('facturation/slr/ajax/update-adjusted-hours/', views.ajax_update_adjusted_hours, name='ajax_update_adjusted_hours'),
 ] 

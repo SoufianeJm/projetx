@@ -26,20 +26,13 @@
                     </thead>
                     <tbody>
                         {% for row in adjusted_df %}
-                            <tr>
+                            <tr data-row-id="{{ row|get_item:'ID' }}">
                                 {% for column in columns %}
-                                    <td>
+                                    <td {% if column == 'Adjusted Hours' %}class="editable-adjusted-hours" data-original="{{ row|get_item:'Adjusted Hours' }}"{% endif %}>
                                         {% if column == 'Adjusted Hours' %}
-                                            <input type="number" 
-                                                   name="adjusted_hours_{{ forloop.parentloop.counter0 }}" 
-                                                   value="{{ row|get_item:'Adjusted Hours' }}"
-                                                   class="form-control form-control-sm modern-input"
-                                                   min="0"
-                                                   step="1"
-                                                   data-original="{{ row|get_item:'Total Heures' }}"
-                                                   data-id="{{ row|get_item:'ID' }}">
+                                            <span class="cell-value">{{ row|get_item:'Adjusted Hours' }}</span>
                                         {% else %}
-                                            {{ row|get_item:column }}
+                                            <span>{% if column == 'Adjusted Cost' %}<span class="adjusted-cost-cell">{{ row|get_item:column }}</span>{% elif column == 'Heures Retirées' %}<span class="heures-retires-cell">{{ row|get_item:column }}</span>{% else %}{{ row|get_item:column }}{% endif %}</span>
                                         {% endif %}
                                     </td>
                                 {% endfor %}
@@ -207,6 +200,26 @@ body, .edit-adjustments-card {
         font-size: 0.98rem;
     }
 }
+.edit-input {
+    font-size: 0.97rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid #b7e4c7;
+    background: #f8fafc;
+    width: 60px;
+    margin-right: 4px;
+}
+.confirm-edit, .cancel-edit {
+    font-size: 1.2rem;
+    vertical-align: middle;
+}
+.editable-adjusted-hours {
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.editable-adjusted-hours:hover {
+    background: #f0f4f8;
+}
 </style>
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
@@ -233,6 +246,96 @@ document.addEventListener('DOMContentLoaded', function() {
     form.addEventListener('submit', function(event) {
         saveBtn.disabled = true;
         saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Saving...';
+    });
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    document.querySelectorAll('.editable-adjusted-hours').forEach(cell => {
+        cell.addEventListener('click', function handler(e) {
+            if (cell.querySelector('input')) return;
+            const originalValue = cell.getAttribute('data-original');
+            const span = cell.querySelector('.cell-value');
+            const row = cell.closest('tr');
+            const rowId = row.getAttribute('data-row-id');
+            // Create input
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.value = span.textContent.trim();
+            input.style.width = '60px';
+            input.className = 'edit-input';
+            // Create icons
+            const check = document.createElement('i');
+            check.className = 'fa fa-check confirm-edit';
+            check.style.color = '#8bb7b7';
+            check.style.cursor = 'pointer';
+            check.style.marginLeft = '8px';
+            const cross = document.createElement('i');
+            cross.className = 'fa fa-times cancel-edit';
+            cross.style.color = '#ff6600';
+            cross.style.cursor = 'pointer';
+            cross.style.marginLeft = '8px';
+            // Clear cell and add input + icons
+            cell.innerHTML = '';
+            cell.appendChild(input);
+            cell.appendChild(check);
+            cell.appendChild(cross);
+            input.focus();
+            // Confirm edit with AJAX
+            check.onclick = function() {
+                const newValue = input.value;
+                fetch(`/facturation/slr/ajax/update-adjusted-hours/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify({
+                        row_id: rowId,
+                        adjusted_hours: newValue,
+                        run_id: '{{ run_id }}'
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        cell.innerHTML = `<span class="cell-value">${data.updated_row.adjusted_hours}</span>`;
+                        cell.setAttribute('data-original', data.updated_row.adjusted_hours);
+                        // Update Adjusted Cost and Heures Retirées in the same row
+                        if (row.querySelector('.adjusted-cost-cell'))
+                            row.querySelector('.adjusted-cost-cell').textContent = data.updated_row.adjusted_cost;
+                        if (row.querySelector('.heures-retires-cell'))
+                            row.querySelector('.heures-retires-cell').textContent = data.updated_row.heures_retires;
+                    } else {
+                        alert('Update failed!');
+                        cell.innerHTML = `<span class=\"cell-value\">${originalValue}</span>`;
+                    }
+                })
+                .catch(() => {
+                    alert('Error updating value!');
+                    cell.innerHTML = `<span class=\"cell-value\">${originalValue}</span>`;
+                });
+            };
+            // Cancel edit
+            cross.onclick = function() {
+                cell.innerHTML = `<span class=\"cell-value\">${originalValue}</span>`;
+            };
+            input.addEventListener('keydown', function(ev) {
+                if (ev.key === 'Enter') check.onclick();
+                if (ev.key === 'Escape') cross.onclick();
+            });
+        });
     });
 });
 </script>

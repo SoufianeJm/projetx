@@ -9,7 +9,7 @@ import pandas as pd
 import numpy as np
 import re
 from io import BytesIO
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from datetime import datetime
 from django.contrib import messages
 import os
@@ -20,6 +20,8 @@ from django.core.serializers.json import DjangoJSONEncoder
 import uuid
 from pathlib import Path
 from django.conf import settings
+from django.views.decorators.http import require_POST
+from django.views.decorators.csrf import csrf_exempt
 
 # Define temporary storage path for SLR runs
 TEMP_FILES_BASE_DIR = Path(settings.MEDIA_ROOT) / 'slr_temp_runs'
@@ -682,3 +684,36 @@ def edit_slr_adjustments(request, run_id):
     except Exception as e:
         messages.error(request, f"Error loading adjustments: {str(e)}")
         return redirect('facturation_slr')
+
+@csrf_exempt
+@require_POST
+def ajax_update_adjusted_hours(request):
+    try:
+        data = json.loads(request.body)
+        row_id = data.get('row_id')
+        new_value = float(data.get('adjusted_hours'))
+        run_id = data.get('run_id')
+        run_dir = TEMP_FILES_BASE_DIR / run_id
+        adjusted_path = run_dir / 'adjusted_initial.parquet'
+        if not adjusted_path.exists():
+            return JsonResponse({'success': False, 'error': 'Adjusted file not found'})
+        import pandas as pd
+        adjusted_df = pd.read_parquet(adjusted_path)
+        # Find the row by ID
+        idx = adjusted_df[adjusted_df['ID'] == row_id].index
+        if len(idx) == 0:
+            return JsonResponse({'success': False, 'error': 'Row not found'})
+        idx = idx[0]
+        adjusted_df.at[idx, 'Adjusted Hours'] = new_value
+        adjusted_df.at[idx, 'Heures Retirées'] = adjusted_df.at[idx, 'Total Heures'] - new_value
+        adjusted_df.at[idx, 'Adjusted Cost'] = new_value * adjusted_df.at[idx, 'Rate']
+        # Save back
+        adjusted_df.to_parquet(adjusted_path)
+        # Return updated values for the row
+        return JsonResponse({'success': True, 'updated_row': {
+            'adjusted_hours': float(adjusted_df.at[idx, 'Adjusted Hours']),
+            'adjusted_cost': float(adjusted_df.at[idx, 'Adjusted Cost']),
+            'heures_retires': float(adjusted_df.at[idx, 'Heures Retirées'])
+        }})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
