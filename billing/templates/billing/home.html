@@ -300,9 +300,12 @@ document.addEventListener('DOMContentLoaded', function() {
 {% if data_available %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOMContentLoaded: Dynamic dashboard JS running');
     const allProjectsData = JSON.parse(document.getElementById('allProjectsData').textContent);
+    console.log('allProjectsData:', allProjectsData);
     const projetListItems = document.querySelectorAll('.projet-list-item');
     const libelleProjets = Object.keys(allProjectsData);
+    console.log('libelleProjets:', libelleProjets);
     let selectedProjet = libelleProjets.length > 0 ? libelleProjets[0] : null;
     let budgetAdjustedChart = null;
     let budgetEcartChart = null;
@@ -315,18 +318,23 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function updateKPIs(data) {
+        console.log('Updating KPIs with data:', data);
         document.getElementById('kpi-nb-employes').textContent = data.nbEmployes;
         document.getElementById('kpi-budget-estime').textContent = formatK(data.budgetEstime);
         document.getElementById('kpi-adjusted-cost').textContent = formatK(data.adjustedCost);
         document.getElementById('kpi-ecart').textContent = formatK(data.ecart);
         document.getElementById('kpi-pct-ajustement').textContent = formatPct(data.pctAjustement);
+        console.log('KPIs updated');
     }
 
     function initializeCharts(projetName) {
+        console.log('initializeCharts called for:', projetName);
         const data = allProjectsData[projetName];
+        console.log('Project data for charts:', data);
         updateKPIs(data);
         const ctxBudgetAdjusted = document.getElementById('budgetAdjustedChart').getContext('2d');
         if (budgetAdjustedChart) budgetAdjustedChart.destroy();
+        console.log('Creating budgetAdjustedChart...');
         budgetAdjustedChart = new Chart(ctxBudgetAdjusted, {
             type: 'bar',
             data: {
@@ -372,6 +380,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         const ctxBudgetEcart = document.getElementById('budgetEcartChart').getContext('2d');
         if (budgetEcartChart) budgetEcartChart.destroy();
+        console.log('Creating budgetEcartChart...');
         budgetEcartChart = new Chart(ctxBudgetEcart, {
             type: 'bar',
             data: {
@@ -414,18 +423,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
         });
+        console.log('Charts created/updated');
     }
 
     if (selectedProjet) {
+        console.log('Initial load: initializing charts for', selectedProjet);
         initializeCharts(selectedProjet);
     }
 
     projetListItems.forEach(item => {
         item.addEventListener('click', function() {
+            console.log('Project list item clicked:', this);
             projetListItems.forEach(li => li.classList.remove('active'));
             this.classList.add('active');
             const selected = this.getAttribute('data-projet');
+            console.log('Selected project from data-attribute:', selected);
             selectedProjet = selected;
+            console.log('About to initialize charts for:', selectedProjet);
             initializeCharts(selectedProjet);
         });
     });

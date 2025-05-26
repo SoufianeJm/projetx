@@ -35,6 +35,7 @@ def home(request):
     import pandas as pd
 
     last_slr_run_id = request.session.get('last_slr_run_id')
+    print(f"DEBUG: Retrieved last_slr_run_id from session: {last_slr_run_id}")
     data_available = False
     libelle_projets_list = []
     overall_kpis = {}
@@ -42,17 +43,31 @@ def home(request):
 
     if last_slr_run_id:
         run_dir = Path(settings.MEDIA_ROOT) / 'slr_temp_runs' / last_slr_run_id
+        print(f"DEBUG: Constructed run_dir: {run_dir}")
+        # Check for each required parquet file
+        parquet_files = ['result_initial.parquet', 'employee_summary_initial.parquet', 'global_summary_initial.parquet']
+        parquet_exists = {}
+        for fname in parquet_files:
+            fpath = run_dir / fname
+            exists = fpath.exists()
+            parquet_exists[fname] = exists
+            print(f"DEBUG: Checking for Parquet file: {fpath}, Exists: {exists}")
         try:
             result_df = pd.read_parquet(run_dir / 'result_initial.parquet')
+            print(f"DEBUG: Loaded result_df, shape: {result_df.shape}")
             employee_summary_df = pd.read_parquet(run_dir / 'employee_summary_initial.parquet')
+            print(f"DEBUG: Loaded employee_summary_df, shape: {employee_summary_df.shape}")
             global_summary_df = pd.read_parquet(run_dir / 'global_summary_initial.parquet')
+            print(f"DEBUG: Loaded global_summary_df, shape: {global_summary_df.shape}")
             data_available = True
-        except Exception:
+        except Exception as e:
+            print(f"ERROR: Failed to load one or more Parquet files: {e}")
             data_available = False
 
     if data_available:
         # Prepare project list
         libelle_projets_list = sorted(result_df['Libelle projet'].dropna().unique())
+        print(f"DEBUG: libelle_projets_list: {libelle_projets_list}")
         # Overall KPIs
         nb_employes = employee_summary_df['Nom'].nunique()
         total_budget_estime = result_df['Estimees'].sum()
@@ -66,6 +81,7 @@ def home(request):
             'total_ecart': float(total_ecart),
             'pct_ajustement': float(pct_ajustement)
         }
+        print(f"DEBUG: overall_kpis: {overall_kpis}")
         # Prepare per-project data
         for libelle in libelle_projets_list:
             proj_result = result_df[result_df['Libelle projet'] == libelle]
@@ -82,12 +98,15 @@ def home(request):
                 'ecart': float(ecart),
                 'pctAjustement': float(pct_ajustement)
             }
+        print(f"DEBUG: projects_data_for_js type: {type(projects_data_for_js)}, Number of projects: {len(projects_data_for_js) if isinstance(projects_data_for_js, dict) else 'N/A'}")
     context = {
         'data_available': data_available,
         'libelle_projets_list': libelle_projets_list,
         'overall_kpis': overall_kpis,
         'projects_data_json_from_view': json.dumps(projects_data_for_js),
     }
+    print(f"DEBUG: Context for home.html: data_available={context.get('data_available')}")
+    print(f"DEBUG: Context projects_data_json: {context.get('projects_data_json_from_view')[:200]}...")
     return render(request, 'billing/home.html', context)
 
 @login_required
