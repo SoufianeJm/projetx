@@ -282,6 +282,13 @@ def facturation_slr(request):
                 processing_logs.append("DEBUG: Starting calculations...")
                 
                 # 1. Prepare base_df (Heures IBM) - already loaded from session
+                # Filter by user-selected missions if any
+                if user_selected_libelles:
+                    processing_logs.append(f"DEBUG: Filtering calculations to only selected missions: {user_selected_libelles}")
+                    base_df = base_df[base_df['Libelle projet'].isin(user_selected_libelles)]
+                else:
+                    processing_logs.append("DEBUG: No missions selected, using all missions.")
+
                 # 2. Prepare codes_df from Mission model
                 codes_qs = Mission.objects.all().values('otp_l2', 'libelle_de_projet')
                 codes_df = pd.DataFrame(list(codes_qs))
@@ -329,13 +336,19 @@ def facturation_slr(request):
                 )
                 employee_summary['Total'] = employee_summary['Rate'] * employee_summary['Total Heures']
                 employee_summary['Total DES'] = employee_summary['Rate DES'] * employee_summary['Total Heures']
-                processing_logs.append("DEBUG: Employee summary calculated")
+                # Filter employee_summary if missions selected
+                if user_selected_libelles:
+                    employee_summary = employee_summary[employee_summary['Libelle projet'].isin(user_selected_libelles)]
+                processing_logs.append("DEBUG: Employee summary calculated and filtered if needed")
 
                 summary_by_proj = employee_summary.groupby('Libelle projet', as_index=False).agg({'Total Heures': 'sum', 'Total': 'sum', 'Total DES': 'sum'})
                 global_summary = pd.merge(mafe[['Libelle projet', 'Estimees']].drop_duplicates(), summary_by_proj, on='Libelle projet', how='left')
                 global_summary[['Total Heures', 'Total', 'Total DES']] = global_summary[['Total Heures', 'Total', 'Total DES']].fillna(0)
                 global_summary['Estimees'] = pd.to_numeric(global_summary['Estimees'].astype(str).str.strip().replace(['', '-', 'nan', 'None'], '0'), errors='coerce').fillna(0)
-                processing_logs.append("DEBUG: Global summary calculated")
+                # Filter global_summary if missions selected
+                if user_selected_libelles:
+                    global_summary = global_summary[global_summary['Libelle projet'].isin(user_selected_libelles)]
+                processing_logs.append("DEBUG: Global summary calculated and filtered if needed")
 
                 adjusted = employee_summary.merge(global_summary[['Libelle projet', 'Estimees']], on='Libelle projet', how='left')
                 adjusted['Total_Projet_Cout'] = adjusted.groupby('Libelle projet')['Total'].transform('sum')
@@ -349,6 +362,10 @@ def facturation_slr(request):
                 adjusted['Heures Retirées'] = adjusted['Total Heures'] - adjusted['Adjusted Hours']
                 adjusted['Adjusted Cost'] = adjusted['Adjusted Hours'] * adjusted['Rate']
                 adjusted['ID'] = adjusted['Nom'].astype(str) + ' - ' + adjusted['Libelle projet'].astype(str)
+                # Filter adjusted if missions selected
+                if user_selected_libelles:
+                    adjusted = adjusted[adjusted['Libelle projet'].isin(user_selected_libelles)]
+
                 cols = ['ID'] + [col for col in adjusted.columns if col != 'ID']
                 adjusted = adjusted[cols]
                 processing_logs.append("DEBUG: Adjusted calculations completed")
@@ -358,8 +375,11 @@ def facturation_slr(request):
                     .agg({'Total Heures': 'sum', 'Adjusted Hours': 'sum', 'Adjusted Cost': 'sum'})
                     .merge(global_summary[['Libelle projet', 'Estimees']], on='Libelle projet', how='left')
                 )
+                # Filter result if missions selected
+                if user_selected_libelles:
+                    result = result[result['Libelle projet'].isin(user_selected_libelles)]
                 result['Ecart'] = result['Estimees'] - result['Adjusted Cost']
-                processing_logs.append("DEBUG: Final result calculations completed")
+                processing_logs.append("DEBUG: Final result calculations completed and filtered if needed")
 
                 for df in [employee_summary, global_summary, adjusted, result]:
                     for col in df.select_dtypes(include='number').columns:
