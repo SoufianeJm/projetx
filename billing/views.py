@@ -273,12 +273,24 @@ def facturation_slr(request):
             adjusted['total_rate_proj'] = adjusted.groupby('Libelle projet')['Rate'].transform('sum')
             adjusted['priority_coeff'] = adjusted['Rate'] / adjusted['total_rate_proj']
             adjusted['final_coeff'] = adjusted['coeff_total'] * adjusted['priority_coeff']
+            
+            # Initial Adjusted Hours calculation
             adjusted['Adjusted Hours'] = (adjusted['Total Heures'] * (1 - adjusted['final_coeff'])).round()
             adjusted['Adjusted Hours'] = adjusted['Adjusted Hours'].apply(lambda x: max(x, 0))
+            
+            # Apply 30% rule for cases where Adjusted Hours is 0 but Total Heures > 0
+            condition_for_30_pct_rule = (adjusted['Adjusted Hours'] == 0) & (adjusted['Total Heures'] > 0)
+            adjusted.loc[condition_for_30_pct_rule, 'Adjusted Hours'] = \
+                (adjusted.loc[condition_for_30_pct_rule, 'Total Heures'] * 0.3).round()
+            
+            # Ensure Adjusted Hours remains non-negative (extra safeguard)
+            adjusted['Adjusted Hours'] = adjusted['Adjusted Hours'].apply(lambda x: max(x, 0))
+            
+            # Calculate Heures Retirées and Adjusted Cost using the final Adjusted Hours
             adjusted['Heures Retirées'] = adjusted['Total Heures'] - adjusted['Adjusted Hours']
             adjusted['Adjusted Cost'] = adjusted['Adjusted Hours'] * adjusted['Rate']
             adjusted['ID'] = adjusted['Nom'].astype(str) + ' - ' + adjusted['Libelle projet'].astype(str)
-            processing_logs.append("DEBUG: Adjusted calculations completed")
+            processing_logs.append("DEBUG: Adjusted calculations completed with 30% rule applied")
 
             cols = ['ID'] + [col for col in adjusted.columns if col != 'ID']
             adjusted = adjusted[cols]
