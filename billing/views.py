@@ -475,7 +475,6 @@ def facturation_slr(request):
                 # Store run_id and filename in session
                 request.session['last_slr_run_id'] = run_id
                 request.session['last_slr_run_heures_filename'] = heures_ibm_file_obj.name
-                request.session['initial_report_generated'] = True
 
                 # Prepare context for the results page
                 context = {
@@ -509,23 +508,14 @@ def facturation_slr(request):
             return render(request, 'billing/facturation_slr.html', context)
 
     # GET request or fallback
-    initial_report_generated = request.session.get('initial_report_generated', False)
-    run_id = request.session.get('last_slr_run_id')
-    initial_excel_filename = None
-    if run_id:
-        run_dir = TEMP_FILES_BASE_DIR / run_id
-        # Try to find the initial Excel file
-        for fname in os.listdir(run_dir) if run_dir.exists() else []:
-            if fname.startswith('Initial_SLR_Report_') and fname.endswith('.xlsx'):
-                initial_excel_filename = fname
-                break
+    # On GET, do not show the buttons unless just after POST
     context = {
         'form': form,
         'page_title': 'Facturation SLR',
         'processing_logs': processing_logs,
-        'initial_report_generated': initial_report_generated and run_id and initial_excel_filename,
-        'run_id': run_id,
-        'initial_excel_filename': initial_excel_filename,
+        'initial_report_generated': False,
+        'run_id': None,
+        'initial_excel_filename': None,
     }
     return render(request, 'billing/facturation_slr.html', context)
 
