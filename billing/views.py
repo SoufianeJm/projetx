@@ -254,7 +254,8 @@ def facturation_slr(request):
                 base_df.groupby(['Libelle projet', 'Nom', 'Grade'], as_index=False)
                 .agg({'Heures': 'sum'})
                 .rename(columns={'Heures': 'Total Heures'})
-                .merge(consultants_df[['Nom', 'Rate', 'Rate DES']], on='Nom', how='left')
+                .merge(consultants_df[['Nom', 'Rate']], on='Nom', how='left')
+                .merge(consultants_df[['Nom', 'Rate DES']], on='Nom', how='left')
             )
             employee_summary['Total'] = employee_summary['Rate'] * employee_summary['Total Heures']
             employee_summary['Total DES'] = employee_summary['Rate DES'] * employee_summary['Total Heures']
@@ -268,14 +269,12 @@ def facturation_slr(request):
 
             adjusted = employee_summary.merge(global_summary[['Libelle projet', 'Estimees']], on='Libelle projet', how='left')
             adjusted['Total_Projet_Cout'] = adjusted.groupby('Libelle projet')['Total'].transform('sum')
-            adjusted['total_rate_proj'] = adjusted.groupby('Libelle projet')['Rate'].transform('sum')
-            adjusted = adjusted[(adjusted['Total_Projet_Cout'] > 0) & (adjusted['total_rate_proj'] > 0)]
             adjusted['coeff_total'] = adjusted['Estimees'] / adjusted['Total_Projet_Cout']
+            adjusted['total_rate_proj'] = adjusted.groupby('Libelle projet')['Rate'].transform('sum')
             adjusted['priority_coeff'] = adjusted['Rate'] / adjusted['total_rate_proj']
             adjusted['final_coeff'] = adjusted['coeff_total'] * adjusted['priority_coeff']
             adjusted['Adjusted Hours'] = (adjusted['Total Heures'] * (1 - adjusted['final_coeff'])).round()
             adjusted['Adjusted Hours'] = adjusted['Adjusted Hours'].apply(lambda x: max(x, 0))
-            adjusted['Heures Retirées'] = adjusted['Total Heures'] - adjusted['Adjusted Hours']
             adjusted['Adjusted Cost'] = adjusted['Adjusted Hours'] * adjusted['Rate']
             adjusted['ID'] = adjusted['Nom'].astype(str) + ' - ' + adjusted['Libelle projet'].astype(str)
             processing_logs.append("DEBUG: Adjusted calculations completed")
@@ -284,7 +283,8 @@ def facturation_slr(request):
             adjusted = adjusted[cols]
 
             result = (
-                adjusted.groupby('Libelle projet', as_index=False)
+                adjusted
+                .groupby('Libelle projet', as_index=False)
                 .agg({'Total Heures': 'sum', 'Adjusted Hours': 'sum', 'Adjusted Cost': 'sum'})
                 .merge(global_summary[['Libelle projet', 'Estimees']], on='Libelle projet', how='left')
             )
