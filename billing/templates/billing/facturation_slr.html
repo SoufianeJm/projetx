@@ -11,14 +11,14 @@
             <div class="alert alert-success mb-4">
                 <h4 class="alert-heading">Report Generated Successfully!</h4>
                 <p>The initial report has been generated and saved. You can now:</p>
-                <div class="d-flex gap-3 mt-3">
-                    <a href="{% url 'download_slr_report' run_id=run_id filename=initial_excel_filename %}" class="btn btn-primary">
-                        <i class="fas fa-download me-2"></i>Download Initial Report
-                    </a>
-                    <a href="{% url 'edit_slr_adjustments' run_id=run_id %}" class="btn btn-success">
-                        <i class="fas fa-edit me-2"></i>Review and Adjust Hours
-                    </a>
-                </div>
+            </div>
+            <div class="d-flex gap-3 mt-3 mb-4">
+                <a href="{% url 'download_slr_report' run_id=run_id filename=initial_excel_filename %}" class="btn btn-primary">
+                    <i class="fas fa-download me-2"></i>Download Initial Report
+                </a>
+                <a href="{% url 'edit_slr_adjustments' run_id=run_id %}" class="btn btn-success">
+                    <i class="fas fa-edit me-2"></i>Review and Adjust Hours
+                </a>
             </div>
         {% endif %}
 
