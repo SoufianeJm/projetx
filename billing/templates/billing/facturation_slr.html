@@ -20,7 +20,7 @@
             </div>
         </div>
 
-        <form method="post" enctype="multipart/form-data" id="slrMultiStepForm" target="_blank">
+        <form method="post" enctype="multipart/form-data" id="slrMultiStepForm">
             {% csrf_token %}
             
             <!-- Step 1: File Upload -->
@@ -191,16 +191,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('slrMultiStepForm');
     const generateReportBtn = document.getElementById('generateReportBtn');
 
-    // Add form submission handler
     form.addEventListener('submit', function(event) {
         if (event.submitter && event.submitter.name === 'submit_step_2') {
             console.log('Form submission started for Step 2');
-            // Show loading state
             generateReportBtn.disabled = true;
             generateReportBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Generating Report...';
-            
-            // Let the form submit normally
-            // The server will handle the file download response
         }
     });
 });
