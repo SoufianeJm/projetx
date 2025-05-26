@@ -292,15 +292,17 @@ def facturation_slr(request):
                     'Jan': 'Jan', 'Feb': 'Feb', 'Mar': 'Mar', 'Apr': 'Apr', 'May': 'May', 'Jun': 'Jun',
                     'Jul': 'Jul', 'Aug': 'Aug', 'Sep': 'Sep', 'Oct': 'Oct', 'Nov': 'Nov', 'Dec': 'Dec'
                 }
-                match = re.search(r'(Janvier|Février|Mars|Avril|Mai|Juin|Juillet|Août|Septembre|Octobre|Novembre|Décembre|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[^\d]*(\d{2,4})', request.FILES.get('heures_ibm_file').name)
-                mois = mois_mapping.get(match.group(1), match.group(1)) if match else ''
-                annee = match.group(2) if match else ''
-                forecast_col_cleaned = next((col for col in mafe.columns if mois in col and 'Forecasts' in col and annee[-2:] in col), None)
-                if forecast_col_cleaned:
-                    mafe_subset = mafe[['Country', 'Customer Name', forecast_col_cleaned]].rename(columns={forecast_col_cleaned: 'Estimees'})
-                    # No MAFE traitement model, so skip merge with Belgian Name
-                    mafe_subset['Libelle projet'] = mafe_subset['Customer Name']
+                heures_ibm_file = request.FILES.get('heures_ibm_file')
+                if heures_ibm_file is not None:
+                    match = re.search(r'(Janvier|Février|Mars|Avril|Mai|Juin|Juillet|Août|Septembre|Octobre|Novembre|Décembre|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[^\d]*(\d{2,4})', heures_ibm_file.name)
+                    mois = mois_mapping.get(match.group(1), match.group(1)) if match else ''
+                    annee = match.group(2) if match else ''
                 else:
+                    match = None
+                    mois = ''
+                    annee = ''
+                    print('ERROR: "heures_ibm_file" was not provided in the request.')
+                # Optionally, handle this case as needed (e.g., raise an error, return a response, etc.)
                     mafe_subset = pd.DataFrame(columns=["Country", "Customer Name", "Libelle projet", "Estimees"])
 
                 # 6. Employee summary
