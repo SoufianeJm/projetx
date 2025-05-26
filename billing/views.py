@@ -115,8 +115,8 @@ def home(request):
         context = {
             'data_available': data_available,
             'libelle_projets_list': libelle_projets_list,
-            'overall_kpis': overall_kpis,
-            'projects_data_json': json.dumps(projects_data),
+            'overall_kpis': to_python_type(overall_kpis),
+            'projects_data_json': json.dumps(to_python_type(projects_data)),
         }
         print(f"DEBUG: Context for home.html: data_available={context.get('data_available')}")
         print(f"DEBUG: Context projects_data_json: {context.get('projects_data_json')[:200]}...")
@@ -730,3 +730,15 @@ def ajax_update_adjusted_hours(request):
         }})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
+
+def to_python_type(obj):
+    if isinstance(obj, dict):
+        return {k: to_python_type(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [to_python_type(v) for v in obj]
+    elif isinstance(obj, (np.integer, np.int64, np.int32)):
+        return int(obj)
+    elif isinstance(obj, (np.floating, np.float64, np.float32)):
+        return float(obj)
+    else:
+        return obj
