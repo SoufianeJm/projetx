@@ -71,48 +71,56 @@ def home(request):
 
     if data_available:
         # Prepare project list
-        libelle_projets_list = sorted(result_df['Libelle projet'].dropna().unique())
-        print(f"DEBUG: libelle_projets_list: {libelle_projets_list}")
-        # Overall KPIs
-        nb_employes = employee_summary_df['Nom'].nunique()
-        total_budget_estime = result_df['Estimees'].sum()
-        total_adjusted_cost = result_df['Adjusted Cost'].sum()
-        total_ecart = result_df['Ecart'].sum()
-        pct_ajustement = ((total_budget_estime - total_adjusted_cost) / total_budget_estime * 100) if total_budget_estime else 0
+        libelle_projets_list = sorted(list(result_df['Libelle projet'].unique()))
+        # 1. Calculate overall KPIs
+        nb_employes_overall = employee_summary_df['Nom'].nunique()
+        total_budget_estime_overall = result_df['Estimees'].sum()
+        total_adjusted_cost_overall = result_df['Adjusted Cost'].sum()
+        total_ecart_overall = result_df['Ecart'].sum()
+        pct_ajustement_overall = (total_ecart_overall / total_budget_estime_overall) * 100 if total_budget_estime_overall else 0
         overall_kpis = {
-            'nb_employes': int(nb_employes),
-            'total_budget_estime': float(total_budget_estime),
-            'total_adjusted_cost': float(total_adjusted_cost),
-            'total_ecart': float(total_ecart),
-            'pct_ajustement': float(pct_ajustement)
+            'nbEmployes': nb_employes_overall,
+            'totalBudgetEstime': total_budget_estime_overall,
+            'totalAdjustedCost': total_adjusted_cost_overall,
+            'totalEcart': total_ecart_overall,
+            'pctAjustement': pct_ajustement_overall
         }
-        print(f"DEBUG: overall_kpis: {overall_kpis}")
-        # Prepare per-project data
-        for libelle in libelle_projets_list:
-            proj_result = result_df[result_df['Libelle projet'] == libelle]
-            proj_employees = employee_summary_df[employee_summary_df['Libelle projet'] == libelle]
-            nb_employes_proj = proj_employees['Nom'].nunique()
-            budget_estime = proj_result['Estimees'].sum()
-            adjusted_cost = proj_result['Adjusted Cost'].sum()
-            ecart = proj_result['Ecart'].sum()
-            pct_ajustement = ((budget_estime - adjusted_cost) / budget_estime * 100) if budget_estime else 0
-            projects_data_for_js[libelle] = {
-                'nbEmployes': int(nb_employes_proj),
-                'budgetEstime': float(budget_estime),
-                'adjustedCost': float(adjusted_cost),
-                'ecart': float(ecart),
-                'pctAjustement': float(pct_ajustement)
+        # 2. Prepare per-project KPIs and chart data
+        projects_data = {}
+        for projet_name in libelle_projets_list:
+            project_result_data = result_df[result_df['Libelle projet'] == projet_name].iloc[0]
+            project_employee_data = employee_summary_df[employee_summary_df['Libelle projet'] == projet_name]
+            nb_employes_project = project_employee_data['Nom'].nunique()
+            budget_estime_project = project_result_data['Estimees']
+            adjusted_cost_project = project_result_data['Adjusted Cost']
+            ecart_project = project_result_data['Ecart']
+            pct_ajustement_project = (ecart_project / budget_estime_project) * 100 if budget_estime_project else 0
+            projects_data[projet_name] = {
+                'kpis': {
+                    'nbEmployes': nb_employes_project,
+                    'totalBudgetEstime': budget_estime_project,
+                    'totalAdjustedCost': adjusted_cost_project,
+                    'totalEcart': ecart_project,
+                    'pctAjustement': pct_ajustement_project
+                },
+                'chart1_data': {
+                    'budgetEstime': budget_estime_project,
+                    'adjustedCost': adjusted_cost_project
+                },
+                'chart2_data': {
+                    'budgetEstime': budget_estime_project,
+                    'ecart': ecart_project
+                }
             }
-        print(f"DEBUG: projects_data_for_js type: {type(projects_data_for_js)}, Number of projects: {len(projects_data_for_js) if isinstance(projects_data_for_js, dict) else 'N/A'}")
-    context = {
-        'data_available': data_available,
-        'libelle_projets_list': libelle_projets_list,
-        'overall_kpis': overall_kpis,
-        'projects_data_json_from_view': json.dumps(projects_data_for_js),
-    }
-    print(f"DEBUG: Context for home.html: data_available={context.get('data_available')}")
-    print(f"DEBUG: Context projects_data_json: {context.get('projects_data_json_from_view')[:200]}...")
-    return render(request, 'billing/home.html', context)
+        context = {
+            'data_available': data_available,
+            'libelle_projets_list': libelle_projets_list,
+            'overall_kpis': overall_kpis,
+            'projects_data_json': json.dumps(projects_data),
+        }
+        print(f"DEBUG: Context for home.html: data_available={context.get('data_available')}")
+        print(f"DEBUG: Context projects_data_json: {context.get('projects_data_json')[:200]}...")
+        return render(request, 'billing/home.html', context)
 
 @login_required
 def resource_list_view(request):
