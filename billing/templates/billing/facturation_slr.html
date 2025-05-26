@@ -61,7 +61,7 @@
                     <button type="button" class="btn btn-secondary" onclick="window.location.reload()">
                         <i class="fas fa-arrow-left me-2"></i>Back to File Upload
                     </button>
-                    <button type="submit" name="submit_step_2" class="btn btn-primary">
+                    <button type="submit" name="submit_step_2" class="btn btn-primary" id="generateReportBtn">
                         <i class="fas fa-file-excel me-2"></i>Generate and Download Report
                     </button>
                 </div>
@@ -185,4 +185,26 @@
 </style>
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('slrMultiStepForm');
+    const generateReportBtn = document.getElementById('generateReportBtn');
+
+    // Add form submission handler
+    form.addEventListener('submit', function(event) {
+        // Only prevent default if we're in step 2 and the generate report button was clicked
+        if (event.submitter && event.submitter.name === 'submit_step_2') {
+            console.log('Generate Report button clicked');
+            // Let the form submit normally
+        }
+    });
+
+    // Add click handler for generate report button
+    generateReportBtn.addEventListener('click', function(event) {
+        console.log('Generate Report button clicked');
+        // Let the form submit normally
+    });
+});
+</script>
 {% endblock %} 

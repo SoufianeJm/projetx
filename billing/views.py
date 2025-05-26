@@ -155,8 +155,11 @@ def facturation_slr(request):
     current_step = 1
 
     if request.method == 'POST':
+        processing_logs.append(f"DEBUG: POST request received. POST data: {request.POST}")
+        
         # Handle Step 1: File Upload
         if 'submit_step_1' in request.POST:
+            processing_logs.append("DEBUG: Entered Step 1 POST processing block")
             form = SLRFileUploadForm(request.POST, request.FILES)
             
             # Debug: log all files in request.FILES
@@ -213,6 +216,7 @@ def facturation_slr(request):
                 request.session['mafe_df_json'] = mafe_df.to_json()
                 request.session['heures_filename'] = heures_ibm_file_obj.name
                 request.session['all_candidate_libelles_for_step2'] = unique_libelles
+                processing_logs.append("DEBUG: Session data stored successfully")
 
                 # Move to Step 2
                 current_step = 2
@@ -238,6 +242,7 @@ def facturation_slr(request):
 
         # Handle Step 2: Mission Selection & Report Generation
         elif 'submit_step_2' in request.POST:
+            processing_logs.append("DEBUG: Entered Step 2 POST processing block")
             current_step = 2
             try:
                 # Retrieve DataFrames from session
@@ -245,6 +250,11 @@ def facturation_slr(request):
                 mafe_df_json = request.session.get('mafe_df_json')
                 heures_filename = request.session.get('heures_filename')
                 all_candidate_libelles = request.session.get('all_candidate_libelles_for_step2')
+
+                processing_logs.append(f"DEBUG: Session data retrieved - base_df_json: {'present' if base_df_json else 'missing'}, "
+                                    f"mafe_df_json: {'present' if mafe_df_json else 'missing'}, "
+                                    f"heures_filename: {'present' if heures_filename else 'missing'}, "
+                                    f"all_candidate_libelles: {'present' if all_candidate_libelles else 'missing'}")
 
                 if not all([base_df_json, mafe_df_json, heures_filename, all_candidate_libelles]):
                     messages.error(request, "Session expired or data missing. Please start over.")
@@ -256,13 +266,17 @@ def facturation_slr(request):
                 # Convert JSON back to DataFrames
                 base_df = pd.read_json(base_df_json)
                 mafe_df = pd.read_json(mafe_df_json)
+                processing_logs.append("DEBUG: DataFrames loaded from session successfully")
 
                 # Get selected missions
                 user_selected_libelles = request.POST.getlist('selected_libelle_projet')
+                processing_logs.append(f"DEBUG: User selected missions: {user_selected_libelles}")
                 target_mission_libelles_for_adjustment = user_selected_libelles if user_selected_libelles else all_candidate_libelles
                 processing_logs.append(f"INFO: Target missions for adjustment: {target_mission_libelles_for_adjustment}")
 
                 # --- MATCH main.py LOGIC ---
+                processing_logs.append("DEBUG: Starting calculations...")
+                
                 # 1. Prepare base_df (Heures IBM) - already loaded from session
                 # 2. Prepare codes_df from Mission model
                 codes_qs = Mission.objects.all().values('otp_l2', 'libelle_de_projet')
@@ -270,6 +284,7 @@ def facturation_slr(request):
                 codes_df = codes_df.rename(columns={'otp_l2': 'Code projet', 'libelle_de_projet': 'Libelle projet'})
                 codes_df['Libelle projet'] = codes_df['Libelle projet'].fillna('Code France')
                 base_df = base_df.merge(codes_df[['Code projet', 'Libelle projet']], on='Code projet', how='left')
+                processing_logs.append("DEBUG: Codes merged with base_df")
 
                 # 3. Prepare consultants_df from Resource model
                 consultants_qs = Resource.objects.all().values('full_name', 'rate_ibm', 'rate_des', 'grade')
@@ -280,11 +295,13 @@ def facturation_slr(request):
                 base_df['Heures'] = pd.to_numeric(base_df['Heures'], errors='coerce').fillna(0)
                 consultants_df['Rate'] = pd.to_numeric(consultants_df['Rate'], errors='coerce').fillna(0)
                 consultants_df['Rate DES'] = pd.to_numeric(consultants_df['Rate DES'], errors='coerce').fillna(0)
+                processing_logs.append("DEBUG: Consultants data prepared")
 
                 # 4. Prepare MAFE file - already loaded from session
                 mafe = mafe_df.copy()
                 mafe.columns = mafe.iloc[14].astype(str).str.strip().str.replace('\n', ' ').str.replace('\r', ' ')
                 mafe = mafe.drop(index=list(range(0, 15))).reset_index(drop=True)
+                processing_logs.append("DEBUG: MAFE data prepared")
 
                 # 5. Find forecast column in MAFE
                 mois_mapping = {
@@ -296,8 +313,10 @@ def facturation_slr(request):
                 match = re.search(r'(Janvier|Février|Mars|Avril|Mai|Juin|Juillet|Août|Septembre|Octobre|Novembre|Décembre|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[^\d]*(\d{2,4})', heures_filename)
                 mois = mois_mapping.get(match.group(1), match.group(1)) if match else ''
                 annee = match.group(2) if match else ''
+                processing_logs.append(f"DEBUG: Month and year extracted: {mois} {annee}")
 
                 # 6. Employee summary
+                processing_logs.append("DEBUG: Starting employee summary calculations")
                 employee_summary = (
                     base_df.groupby(['Libelle projet', 'Nom', 'Grade'], as_index=False)
                     .agg({'Heures': 'sum'})
@@ -306,11 +325,13 @@ def facturation_slr(request):
                 )
                 employee_summary['Total'] = employee_summary['Rate'] * employee_summary['Total Heures']
                 employee_summary['Total DES'] = employee_summary['Rate DES'] * employee_summary['Total Heures']
+                processing_logs.append("DEBUG: Employee summary calculated")
 
                 summary_by_proj = employee_summary.groupby('Libelle projet', as_index=False).agg({'Total Heures': 'sum', 'Total': 'sum', 'Total DES': 'sum'})
-                global_summary = pd.merge(mafe_subset[['Libelle projet', 'Estimees']].drop_duplicates(), summary_by_proj, on='Libelle projet', how='left')
+                global_summary = pd.merge(mafe[['Libelle projet', 'Estimees']].drop_duplicates(), summary_by_proj, on='Libelle projet', how='left')
                 global_summary[['Total Heures', 'Total', 'Total DES']] = global_summary[['Total Heures', 'Total', 'Total DES']].fillna(0)
                 global_summary['Estimees'] = pd.to_numeric(global_summary['Estimees'].astype(str).str.strip().replace(['', '-', 'nan', 'None'], '0'), errors='coerce').fillna(0)
+                processing_logs.append("DEBUG: Global summary calculated")
 
                 adjusted = employee_summary.merge(global_summary[['Libelle projet', 'Estimees']], on='Libelle projet', how='left')
                 adjusted['Total_Projet_Cout'] = adjusted.groupby('Libelle projet')['Total'].transform('sum')
@@ -326,6 +347,7 @@ def facturation_slr(request):
                 adjusted['ID'] = adjusted['Nom'].astype(str) + ' - ' + adjusted['Libelle projet'].astype(str)
                 cols = ['ID'] + [col for col in adjusted.columns if col != 'ID']
                 adjusted = adjusted[cols]
+                processing_logs.append("DEBUG: Adjusted calculations completed")
 
                 result = (
                     adjusted.groupby('Libelle projet', as_index=False)
@@ -333,12 +355,14 @@ def facturation_slr(request):
                     .merge(global_summary[['Libelle projet', 'Estimees']], on='Libelle projet', how='left')
                 )
                 result['Ecart'] = result['Estimees'] - result['Adjusted Cost']
+                processing_logs.append("DEBUG: Final result calculations completed")
 
                 for df in [employee_summary, global_summary, adjusted, result]:
                     for col in df.select_dtypes(include='number').columns:
                         df[col] = df[col].round(0)
 
                 # Generate Excel file
+                processing_logs.append("DEBUG: Starting Excel file generation")
                 output = BytesIO()
                 with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                     workbook = writer.book
@@ -380,10 +404,12 @@ def facturation_slr(request):
                     content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
                 )
                 response['Content-Disposition'] = f'attachment; filename="{filename}"'
+                processing_logs.append("DEBUG: Excel file response prepared")
                 return response
 
             except Exception as e:
                 processing_logs.append(f"ERROR: Exception during calculation: {str(e)}<br><pre>{traceback.format_exc()}</pre>")
+                messages.error(request, f"An error occurred while generating the report: {str(e)}")
                 # Clear session data on error
                 for key in ['base_df_json', 'mafe_df_json', 'heures_filename', 'all_candidate_libelles_for_step2']:
                     request.session.pop(key, None)
