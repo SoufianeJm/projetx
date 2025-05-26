@@ -411,7 +411,7 @@ def facturation_slr(request):
 
                 # Add success message
                 messages.success(request, f"Initial report '{filename}' generated and saved. You can now review and make manual adjustments.")
-
+                
                 # Return the results page instead of the Excel file
                 return render(request, 'billing/facturation_slr.html', context)
 

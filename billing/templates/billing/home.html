@@ -2,11 +2,433 @@
 
 {% block title %}Accueil - Dashboard{% endblock %}
 
-{% block page_title %}Accueil{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
 
 {% block content %}
-<div class="welcome-message">
-    <h2>Welcome to the SLR Billing Application!</h2>
-    <p>Please use the sidebar to navigate to the Resources, Missions, or Facturation SLR sections.</p>
+<div class="tab-bar">
+    <button class="tab active" data-tab="1">ACCEUIL GÉNÉRAL</button>
+    <button class="tab" data-tab="2">ANALYSE PAR EMPLOYÉ</button>
+    <button class="tab" data-tab="3">AVANT / APRÉS AJUSTEMENT</button>
+    <button class="tab" data-tab="4">TABLEAU INTERACTIF</button>
 </div>
+<div id="tab-content-1" class="tab-content">
+    <div class="accueil-general-content">
+        <div class="kpi-container">
+            <div class="kpi-card">
+                <h4>Nb Employes</h4>
+                <p id="kpi-nb-employes">5</p>
+            </div>
+            <div class="kpi-card">
+                <h4>Total Budget Estime</h4>
+                <p id="kpi-budget-estime">25K</p>
+            </div>
+            <div class="kpi-card">
+                <h4>Total Adjusted Cost</h4>
+                <p id="kpi-adjusted-cost">22K</p>
+            </div>
+            <div class="kpi-card">
+                <h4>Total Ecart</h4>
+                <p id="kpi-ecart">-3K</p>
+            </div>
+            <div class="kpi-card">
+                <h4>% Ajustement</h4>
+                <p id="kpi-pct-ajustement">12%</p>
+            </div>
+        </div>
+        <div class="dashboard-body">
+            <div class="libelle-projet-list">
+                <h4>Libelle projet</h4>
+                <ul id="projetList">
+                    <li class="projet-list-item active" data-projet="CONFORAMA">CONFORAMA</li>
+                    <li class="projet-list-item" data-projet="COR ANALYSIS">COR ANALYSIS</li>
+                    <li class="projet-list-item" data-projet="CREDIT ANDORRA">CREDIT ANDORRA</li>
+                </ul>
+            </div>
+            <div class="charts-area">
+                <div class="chart-card">
+                    <h5>Total Budget Estime and Total Adjusted Cost by Libelle projet</h5>
+                    <canvas id="budgetAdjustedChart"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h5>Coût Total et Budget Estimé Projet par Libelle projet</h5>
+                    <canvas id="budgetEcartChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<div id="tab-content-2" class="tab-content" style="display:none;">This is ANALYSE PAR EMPLOYÉ</div>
+<div id="tab-content-3" class="tab-content" style="display:none;">This is AVANT / APRÉS AJUSTEMENT</div>
+<div id="tab-content-4" class="tab-content" style="display:none;">This is TABLEAU INTERACTIF</div>
+{% endblock %}
+
+{% block extra_head %}
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+/* Base styles */
+:root {
+    --primary-color: #80C342;
+    --text-dark: #343A40;
+    --text-muted: #6C757D;
+    --border-color: #E9ECEF;
+    --bg-light: #F4F6F8;
+    --bg-white: #FFFFFF;
+    --shadow-sm: 0 2px 5px rgba(0,0,0,0.05);
+    --shadow-md: 0 2px 8px rgba(0,0,0,0.08);
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --spacing-xs: 8px;
+    --spacing-sm: 12px;
+    --spacing-md: 16px;
+    --spacing-lg: 20px;
+    --spacing-xl: 24px;
+}
+
+/* Tab styles */
+.tab-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    margin-bottom: var(--spacing-xl);
+    background: var(--bg-white);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-md) var(--spacing-xl) 0;
+    box-shadow: var(--shadow-sm);
+}
+
+.tab {
+    background: none;
+    border: none;
+    color: var(--text-dark);
+    font-weight: 600;
+    font-size: 1rem;
+    padding: var(--spacing-xs) var(--spacing-lg);
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    letter-spacing: 0.5px;
+}
+
+.tab.active, .tab:hover {
+    background: #e9f7df;
+    color: var(--primary-color);
+}
+
+.tab-content {
+    background: var(--bg-light);
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    padding: var(--spacing-xl);
+    margin-bottom: var(--spacing-xl);
+    font-size: 1.2rem;
+    color: var(--text-dark);
+}
+
+/* Dashboard content styles */
+.accueil-general-content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xl);
+    font-family: Inter, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* KPI container and cards */
+.kpi-container {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--spacing-lg);
+    margin-bottom: var(--spacing-xl);
+}
+
+.kpi-card {
+    flex: 1;
+    background: var(--bg-white);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-lg);
+    text-align: center;
+    box-shadow: var(--shadow-sm);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.kpi-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.kpi-card h4 {
+    margin: 0 0 var(--spacing-xs) 0;
+    font-size: 14px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+}
+
+.kpi-card p {
+    margin: 0;
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--text-dark);
+}
+
+/* Dashboard body layout */
+.dashboard-body {
+    display: flex;
+    gap: var(--spacing-xl);
+}
+
+/* Project list styles */
+.libelle-projet-list {
+    flex: 0 0 30%;
+    background: var(--bg-white);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-lg);
+    box-shadow: var(--shadow-sm);
+    height: fit-content;
+}
+
+.libelle-projet-list h4 {
+    margin: 0 0 var(--spacing-md) 0;
+    font-size: 16px;
+    color: var(--text-dark);
+    font-weight: 600;
+}
+
+#projetList {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.projet-list-item {
+    padding: var(--spacing-sm) var(--spacing-md);
+    cursor: pointer;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-dark);
+    border-radius: var(--radius-sm);
+    margin-bottom: var(--spacing-xs);
+    transition: all 0.2s ease;
+}
+
+.projet-list-item:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+}
+
+.projet-list-item:hover {
+    background-color: #f8f9fa;
+}
+
+.projet-list-item.active {
+    background-color: var(--primary-color);
+    color: var(--bg-white);
+    font-weight: 500;
+}
+
+/* Charts area styles */
+.charts-area {
+    flex: 0 0 70%;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xl);
+}
+
+.chart-card {
+    background: var(--bg-white);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-lg);
+    box-shadow: var(--shadow-sm);
+}
+
+.chart-card h5 {
+    margin: 0 0 var(--spacing-md) 0;
+    font-size: 16px;
+    color: var(--text-dark);
+    font-weight: 600;
+}
+
+/* Chart.js customization */
+canvas {
+    width: 100% !important;
+    height: auto !important;
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Wait for the DOM to be fully loaded
+document.addEventListener('DOMContentLoaded', function() {
+    // Get all tab buttons
+    const tabs = document.querySelectorAll('.tab');
+    
+    // Add click event to each tab
+    tabs.forEach(tab => {
+        tab.addEventListener('click', function() {
+            // Get the tab number from data-tab attribute
+            const tabNumber = this.getAttribute('data-tab');
+            
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.style.display = 'none';
+            });
+            
+            // Show the selected tab content
+            const selectedContent = document.getElementById('tab-content-' + tabNumber);
+            if (selectedContent) {
+                selectedContent.style.display = 'block';
+            }
+            
+            // Update active state of tabs
+            tabs.forEach(t => t.classList.remove('active'));
+            this.classList.add('active');
+        });
+    });
+    
+    // Show first tab by default
+    document.querySelector('.tab[data-tab="1"]').click();
+    
+    // Initialize charts and other functionality
+    const conforamaData = {
+        nbEmployes: 2,
+        budgetEstime: 20000,
+        adjustedCost: 18000,
+        ecart: -2000,
+        pctAjustement: 8.94
+    };
+
+    // Update KPIs for the default project
+    document.getElementById('kpi-nb-employes').textContent = conforamaData.nbEmployes;
+    document.getElementById('kpi-budget-estime').textContent = (conforamaData.budgetEstime / 1000).toFixed(0) + 'K';
+    document.getElementById('kpi-adjusted-cost').textContent = (conforamaData.adjustedCost / 1000).toFixed(0) + 'K';
+    document.getElementById('kpi-ecart').textContent = (conforamaData.ecart / 1000).toFixed(0) + 'K';
+    document.getElementById('kpi-pct-ajustement').textContent = conforamaData.pctAjustement.toFixed(2) + '%';
+
+    // Chart 1: Budget Estime vs Adjusted Cost (Horizontal Bar)
+    const ctxBudgetAdjusted = document.getElementById('budgetAdjustedChart').getContext('2d');
+    new Chart(ctxBudgetAdjusted, {
+        type: 'bar',
+        data: {
+            labels: ['CONFORAMA'],
+            datasets: [
+                {
+                    label: 'Total Budget Estime',
+                    data: [conforamaData.budgetEstime],
+                    backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    borderWidth: 1
+                },
+                {
+                    label: 'Total Adjusted Cost',
+                    data: [conforamaData.adjustedCost],
+                    backgroundColor: 'rgba(75, 192, 192, 0.6)',
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    borderWidth: 1
+                }
+            ]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    beginAtZero: true,
+                    ticks: { 
+                        callback: function(value) { return (value/1000) + 'K'},
+                        font: {
+                            family: 'Inter, sans-serif'
+                        }
+                    }
+                },
+                y: {
+                    font: {
+                        family: 'Inter, sans-serif'
+                    }
+                }
+            },
+            plugins: {
+                legend: { 
+                    position: 'top',
+                    labels: {
+                        font: {
+                            family: 'Inter, sans-serif'
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    // Chart 2: Budget Estime vs Ecart (Vertical Bar)
+    const ctxBudgetEcart = document.getElementById('budgetEcartChart').getContext('2d');
+    new Chart(ctxBudgetEcart, {
+        type: 'bar',
+        data: {
+            labels: ['CONFORAMA'],
+            datasets: [
+                {
+                    label: 'Total Budget Estime',
+                    data: [conforamaData.budgetEstime],
+                    backgroundColor: 'rgba(75, 192, 192, 0.6)',
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    borderWidth: 1
+                },
+                {
+                    label: 'Total Ecart',
+                    data: [conforamaData.ecart],
+                    backgroundColor: 'rgba(255, 99, 132, 0.6)',
+                    borderColor: 'rgba(255, 99, 132, 1)',
+                    borderWidth: 1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: false,
+                    ticks: { 
+                        callback: function(value) { return (value/1000) + 'K'},
+                        font: {
+                            family: 'Inter, sans-serif'
+                        }
+                    }
+                },
+                x: {
+                    font: {
+                        family: 'Inter, sans-serif'
+                    }
+                }
+            },
+            plugins: {
+                legend: { 
+                    position: 'top',
+                    labels: {
+                        font: {
+                            family: 'Inter, sans-serif'
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    // Project list interactivity
+    const projetListItems = document.querySelectorAll('.projet-list-item');
+    projetListItems.forEach(item => {
+        item.addEventListener('click', function() {
+            projetListItems.forEach(li => li.classList.remove('active'));
+            this.classList.add('active');
+            const selectedProjet = this.getAttribute('data-projet');
+            // Chart update logic will be implemented next
+        });
+    });
+});
+</script>
 {% endblock %} 
