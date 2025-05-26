@@ -121,6 +121,15 @@ def home(request):
         print(f"DEBUG: Context for home.html: data_available={context.get('data_available')}")
         print(f"DEBUG: Context projects_data_json: {context.get('projects_data_json')[:200]}...")
         return render(request, 'billing/home.html', context)
+    
+    # Return response when no data is available
+    context = {
+        'data_available': False,
+        'libelle_projets_list': [],
+        'overall_kpis': {},
+        'projects_data_json': '{}'
+    }
+    return render(request, 'billing/home.html', context)
 
 @login_required
 def resource_list_view(request):
