@@ -658,26 +658,28 @@ def edit_slr_adjustments(request, run_id):
                 output.seek(0)
                 now_str = datetime.now().strftime('%Y%m%d_%H%M%S')
                 updated_filename = f"SLR_Facturation_Updated_{now_str}.xlsx"
-                
                 # Save the updated Excel file
                 with open(run_dir / updated_filename, 'wb') as f:
                     f.write(output.getvalue())
 
-                messages.success(request, 'Adjustments saved successfully. You can download the updated report.')
-                return redirect('download_slr_report', run_id=run_id, filename=updated_filename)
+                messages.success(request, 'Adjustments saved successfully. You can now download the updated report.')
+                request.session['updated_filename'] = updated_filename
+                return redirect('edit_slr_adjustments', run_id=run_id)
 
             except Exception as e:
                 messages.error(request, f"Error saving adjustments: {str(e)}")
                 return redirect('edit_slr_adjustments', run_id=run_id)
 
         # Prepare context for the edit page
+        updated_filename = request.session.pop('updated_filename', None)
         context = {
             'page_title': 'Edit SLR Adjustments',
             'run_id': run_id,
             'adjusted_df': display_df.to_dict('records'),
             'columns': display_df.columns.tolist(),
             'total_rows': len(display_df),
-            'original_filename': request.session.get('last_slr_run_heures_filename', 'Unknown')
+            'original_filename': request.session.get('last_slr_run_heures_filename', 'Unknown'),
+            'updated_filename': updated_filename,
         }
         return render(request, 'billing/edit_slr_adjustments.html', context)
 

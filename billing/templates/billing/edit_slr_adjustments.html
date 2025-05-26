@@ -8,6 +8,11 @@
 {% block content %}
 <div class="edit-adjustments-wrapper">
     <div class="edit-adjustments-card modern-adjustments-card">
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-success">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
         <div class="alert alert-info mb-4">
             <h4 class="alert-heading">Editing Adjustments</h4>
             <p>You are editing adjustments for the report generated from: <strong>{{ original_filename }}</strong></p>
@@ -49,6 +54,13 @@
                     <i class="fas fa-times me-2"></i>Cancel
                 </a>
             </div>
+            {% if updated_filename %}
+                <div class="mt-3">
+                    <a href="{% url 'download_slr_report' run_id=run_id filename=updated_filename %}" class="btn btn-success">
+                        <i class="fas fa-download"></i> Download Updated Report
+                    </a>
+                </div>
+            {% endif %}
         </form>
     </div>
 </div>
