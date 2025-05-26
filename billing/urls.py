@@ -14,4 +14,6 @@ urlpatterns = [
     path('missions/tracking/', views.mission_calculation_tracking_view, name='mission_calculation_tracking'),
     path('facturation/slr/', views.facturation_slr, name='facturation_slr'),
     path('missions/bulk-delete/', views.mission_bulk_delete, name='mission_bulk_delete'),
+    path('facturation/slr/<str:run_id>/download/<str:filename>/', views.download_slr_report, name='download_slr_report'),
+    path('facturation/slr/<str:run_id>/edit/', views.edit_slr_adjustments, name='edit_slr_adjustments'),
 ] 

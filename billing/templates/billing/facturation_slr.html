@@ -7,11 +7,26 @@
 {% block content %}
 <div class="facturation-wrapper">
     <div class="facturation-card">
+        {% if initial_report_generated %}
+            <div class="alert alert-success mb-4">
+                <h4 class="alert-heading">Report Generated Successfully!</h4>
+                <p>The initial report has been generated and saved. You can now:</p>
+                <div class="d-flex gap-3 mt-3">
+                    <a href="{% url 'download_slr_report' run_id=run_id filename=initial_excel_filename %}" class="btn btn-primary">
+                        <i class="fas fa-download me-2"></i>Download Initial Report
+                    </a>
+                    <a href="{% url 'edit_slr_adjustments' run_id=run_id %}" class="btn btn-success">
+                        <i class="fas fa-edit me-2"></i>Review and Adjust Hours
+                    </a>
+                </div>
+            </div>
+        {% endif %}
+
         <form method="post" enctype="multipart/form-data" id="slrForm">
             {% csrf_token %}
             {{ form|crispy }}
             <button type="submit" name="submit" class="btn btn-primary mt-3" id="generateReportBtn">
-                <i class="fas fa-file-excel me-2"></i>Generate and Download Report
+                <i class="fas fa-file-excel me-2"></i>Generate Report
             </button>
         </form>
 
@@ -61,6 +76,25 @@
     }
     .btn-primary:hover {
         background: #6d9a1d;
+    }
+    .btn-success {
+        background: #28a745;
+        border: none;
+    }
+    .btn-success:hover {
+        background: #218838;
+    }
+    .alert {
+        border-radius: 8px;
+        padding: 1.25rem;
+    }
+    .alert-success {
+        background-color: #d4edda;
+        border-color: #c3e6cb;
+        color: #155724;
+    }
+    .gap-3 {
+        gap: 1rem;
     }
 </style>
 

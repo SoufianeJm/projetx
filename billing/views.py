@@ -17,6 +17,13 @@ import traceback
 from django.db import models
 import json
 from django.core.serializers.json import DjangoJSONEncoder
+import uuid
+from pathlib import Path
+from django.conf import settings
+
+# Define temporary storage path for SLR runs
+TEMP_FILES_BASE_DIR = Path(settings.MEDIA_ROOT) / 'slr_temp_runs'
+TEMP_FILES_BASE_DIR.mkdir(parents=True, exist_ok=True)
 
 # Create your views here.
 
@@ -186,6 +193,12 @@ def facturation_slr(request):
             return render(request, 'billing/facturation_slr.html', context)
 
         try:
+            # Generate a unique run ID
+            run_id = str(uuid.uuid4())
+            run_dir = TEMP_FILES_BASE_DIR / run_id
+            run_dir.mkdir(parents=True, exist_ok=True)
+            processing_logs.append(f"DEBUG: Created temporary directory for run_id {run_id} at {run_dir}")
+
             # Process Heures IBM file
             heures_ibm_file_obj.seek(0)
             base_df = pd.read_excel(heures_ibm_file_obj, sheet_name='base', usecols="E,H,I,M,N")
@@ -324,6 +337,21 @@ def facturation_slr(request):
                 for col in df.select_dtypes(include='number').columns:
                     df[col] = df[col].round(0)
 
+            # Save all key DataFrames to Parquet files
+            try:
+                base_df.to_parquet(run_dir / 'base_df.parquet')
+                consultants_df.to_parquet(run_dir / 'consultants_df.parquet')
+                mafe_df.to_parquet(run_dir / 'mafe_df.parquet')
+                codes_df.to_parquet(run_dir / 'codes_df.parquet')
+                employee_summary.to_parquet(run_dir / 'employee_summary_initial.parquet')
+                global_summary.to_parquet(run_dir / 'global_summary_initial.parquet')
+                adjusted.to_parquet(run_dir / 'adjusted_initial.parquet')
+                result.to_parquet(run_dir / 'result_initial.parquet')
+                processing_logs.append(f"INFO: All DataFrames for run_id {run_id} saved to Parquet files.")
+            except Exception as e:
+                processing_logs.append(f"ERROR: Failed to save DataFrames for run_id {run_id}: {str(e)}")
+                raise
+
             # Generate Excel file
             processing_logs.append("DEBUG: Starting Excel file generation")
             output = BytesIO()
@@ -360,17 +388,32 @@ def facturation_slr(request):
                 filename = f"SLR_Facturation_{now_str}.xlsx"
                 processing_logs.append(f"INFO: Excel file generated successfully: {filename}")
 
-                # Prepare the response
-                response = HttpResponse(
-                    output.getvalue(),
-                    content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-                )
-                response['Content-Disposition'] = f'attachment; filename="{filename}"'
-                response['Content-Length'] = len(output.getvalue())
-                processing_logs.append("DEBUG: Response prepared successfully")
-                
-                # Return the response immediately
-                return response
+                # Save the initial Excel to the run directory
+                initial_excel_filename = f"Initial_SLR_Report_{run_id[:8]}.xlsx"
+                with open(run_dir / initial_excel_filename, 'wb') as f:
+                    f.write(output.getvalue())
+                processing_logs.append(f"INFO: Initial Excel saved as {initial_excel_filename}")
+
+                # Store run_id and filename in session
+                request.session['last_slr_run_id'] = run_id
+                request.session['last_slr_run_heures_filename'] = heures_ibm_file_obj.name
+
+                # Prepare context for the results page
+                context = {
+                    'form': SLRFileUploadForm(),  # Fresh form for a new upload
+                    'page_title': 'Facturation SLR - Initial Report Generated',
+                    'processing_logs': processing_logs,
+                    'initial_report_generated': True,
+                    'run_id': run_id,
+                    'initial_excel_filename': initial_excel_filename,
+                    'original_filename': filename
+                }
+
+                # Add success message
+                messages.success(request, f"Initial report '{filename}' generated and saved. You can now review and make manual adjustments.")
+
+                # Return the results page instead of the Excel file
+                return render(request, 'billing/facturation_slr.html', context)
 
             except Exception as e:
                 processing_logs.append(f"ERROR: Excel generation failed: {str(e)}")
@@ -425,3 +468,128 @@ def mission_bulk_delete(request):
         messages.warning(request, 'Invalid request method.')
     
     return redirect('mission_list')
+
+@login_required
+def download_slr_report(request, run_id, filename):
+    """View to download a generated SLR report."""
+    try:
+        file_path = TEMP_FILES_BASE_DIR / run_id / filename
+        if not file_path.exists():
+            messages.error(request, f"Report file not found: {filename}")
+            return redirect('facturation_slr')
+        
+        with open(file_path, 'rb') as f:
+            response = HttpResponse(f.read(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            return response
+    except Exception as e:
+        messages.error(request, f"Error downloading report: {str(e)}")
+        return redirect('facturation_slr')
+
+@login_required
+def edit_slr_adjustments(request, run_id):
+    """View to edit SLR adjustments."""
+    try:
+        run_dir = TEMP_FILES_BASE_DIR / run_id
+        if not run_dir.exists():
+            messages.error(request, f"Run directory not found for ID: {run_id}")
+            return redirect('facturation_slr')
+
+        # Load the necessary DataFrames
+        adjusted_df = pd.read_parquet(run_dir / 'adjusted_initial.parquet')
+        base_df = pd.read_parquet(run_dir / 'base_df.parquet')
+        consultants_df = pd.read_parquet(run_dir / 'consultants_df.parquet')
+        mafe_df = pd.read_parquet(run_dir / 'mafe_df.parquet')
+        codes_df = pd.read_parquet(run_dir / 'codes_df.parquet')
+        employee_summary = pd.read_parquet(run_dir / 'employee_summary_initial.parquet')
+        global_summary = pd.read_parquet(run_dir / 'global_summary_initial.parquet')
+        result = pd.read_parquet(run_dir / 'result_initial.parquet')
+
+        if request.method == 'POST':
+            # Handle form submission for adjustments
+            try:
+                # Get all adjusted hours from the form
+                adjusted_hours = {}
+                for key, value in request.POST.items():
+                    if key.startswith('adjusted_hours_'):
+                        index = int(key.split('_')[-1])
+                        adjusted_hours[index] = float(value)
+
+                # Update the adjusted DataFrame
+                for index, hours in adjusted_hours.items():
+                    adjusted_df.loc[index, 'Adjusted Hours'] = hours
+                    adjusted_df.loc[index, 'Heures Retirées'] = adjusted_df.loc[index, 'Total Heures'] - hours
+                    adjusted_df.loc[index, 'Adjusted Cost'] = hours * adjusted_df.loc[index, 'Rate']
+
+                # Save the updated adjusted DataFrame
+                adjusted_df.to_parquet(run_dir / 'adjusted_updated.parquet')
+
+                # Recalculate the result DataFrame
+                result = (
+                    adjusted_df
+                    .groupby('Libelle projet', as_index=False)
+                    .agg({'Total Heures': 'sum', 'Adjusted Hours': 'sum', 'Adjusted Cost': 'sum', 'Heures Retirées': 'sum'})
+                    .merge(global_summary[['Libelle projet', 'Estimees']], on='Libelle projet', how='left')
+                )
+                result['Ecart'] = result['Estimees'] - result['Adjusted Cost']
+
+                # Save the updated result DataFrame
+                result.to_parquet(run_dir / 'result_updated.parquet')
+
+                # Generate a new Excel file with the updates
+                output = BytesIO()
+                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                    workbook = writer.book
+                    header_format = workbook.add_format({'bold': True, 'bg_color': '#D9D2E9'})
+                    int_format = workbook.add_format({'num_format': '0'})
+
+                    def write(df, sheet, selected_cols=None):
+                        if selected_cols:
+                            df = df[selected_cols]
+                        df.to_excel(writer, sheet_name=sheet, index=False, startrow=1, header=False)
+                        ws = writer.sheets[sheet]
+                        for i, col in enumerate(df.columns):
+                            ws.write(0, i, col, header_format)
+                            width = max(15, len(str(col)) + 2)
+                            ws.set_column(i, i, width, int_format if pd.api.types.is_integer_dtype(df[col]) else None)
+                        ws.add_table(0, 0, len(df), len(df.columns) - 1, {
+                            'name': f'Table_{sheet}',
+                            'style': 'TableStyleLight8',
+                            'columns': [{'header': c} for c in df.columns]
+                        })
+
+                    write(base_df[['Date', 'Code projet', 'Nom', 'Grade', 'Heures', 'Libelle projet']], '00_Base')
+                    write(employee_summary, '01_Employee_Summary', ['Libelle projet', 'Nom', 'Grade', 'Total Heures', 'Rate', 'Rate DES', 'Total', 'Total DES'])
+                    write(global_summary, '02_Global_Summary', ['Libelle projet', 'Total Heures', 'Total', 'Total DES', 'Estimees'])
+                    write(adjusted_df, '03_Adjusted', ['ID', 'Libelle projet', 'Nom', 'Grade', 'Total Heures', 'Rate', 'Total', 'Adjusted Hours', 'Heures Retirées', 'Adjusted Cost'])
+                    write(result, '04_Result', ['Libelle projet', 'Total Heures', 'Adjusted Hours', 'Heures Retirées', 'Adjusted Cost', 'Estimees', 'Ecart'])
+
+                output.seek(0)
+                now_str = datetime.now().strftime('%Y%m%d_%H%M%S')
+                updated_filename = f"SLR_Facturation_Updated_{now_str}.xlsx"
+                
+                # Save the updated Excel file
+                with open(run_dir / updated_filename, 'wb') as f:
+                    f.write(output.getvalue())
+
+                messages.success(request, 'Adjustments saved successfully. You can download the updated report.')
+                return redirect('download_slr_report', run_id=run_id, filename=updated_filename)
+
+            except Exception as e:
+                messages.error(request, f"Error saving adjustments: {str(e)}")
+                return redirect('edit_slr_adjustments', run_id=run_id)
+
+        # Prepare context for the edit page
+        context = {
+            'page_title': 'Edit SLR Adjustments',
+            'run_id': run_id,
+            'adjusted_df': adjusted_df.to_dict('records'),
+            'columns': adjusted_df.columns.tolist(),
+            'total_rows': len(adjusted_df),
+            'original_filename': request.session.get('last_slr_run_heures_filename', 'Unknown')
+        }
+        return render(request, 'billing/edit_slr_adjustments.html', context)
+
+    except Exception as e:
+        messages.error(request, f"Error loading adjustments: {str(e)}")
+        return redirect('facturation_slr')
