@@ -33,12 +33,12 @@
                                         {% if column == 'Adjusted Hours' %}
                                             <input type="number" 
                                                    name="adjusted_hours_{{ forloop.parentloop.counter0 }}" 
-                                                   value="{{ row.Adjusted Hours }}"
+                                                   value="{{ row|get_item:'Adjusted Hours' }}"
                                                    class="form-control form-control-sm"
                                                    min="0"
                                                    step="1"
-                                                   data-original="{{ row.Total Heures }}"
-                                                   data-id="{{ row.ID }}">
+                                                   data-original="{{ row|get_item:'Total Heures' }}"
+                                                   data-id="{{ row|get_item:'ID' }}">
                                         {% else %}
                                             {{ row|get_item:column }}
                                         {% endif %}
