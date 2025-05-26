@@ -275,6 +275,7 @@ def facturation_slr(request):
             adjusted['final_coeff'] = adjusted['coeff_total'] * adjusted['priority_coeff']
             adjusted['Adjusted Hours'] = (adjusted['Total Heures'] * (1 - adjusted['final_coeff'])).round()
             adjusted['Adjusted Hours'] = adjusted['Adjusted Hours'].apply(lambda x: max(x, 0))
+            adjusted['Heures Retirées'] = adjusted['Total Heures'] - adjusted['Adjusted Hours']
             adjusted['Adjusted Cost'] = adjusted['Adjusted Hours'] * adjusted['Rate']
             adjusted['ID'] = adjusted['Nom'].astype(str) + ' - ' + adjusted['Libelle projet'].astype(str)
             processing_logs.append("DEBUG: Adjusted calculations completed")
@@ -285,7 +286,7 @@ def facturation_slr(request):
             result = (
                 adjusted
                 .groupby('Libelle projet', as_index=False)
-                .agg({'Total Heures': 'sum', 'Adjusted Hours': 'sum', 'Adjusted Cost': 'sum'})
+                .agg({'Total Heures': 'sum', 'Adjusted Hours': 'sum', 'Adjusted Cost': 'sum', 'Heures Retirées': 'sum'})
                 .merge(global_summary[['Libelle projet', 'Estimees']], on='Libelle projet', how='left')
             )
             result['Ecart'] = result['Estimees'] - result['Adjusted Cost']
@@ -324,7 +325,7 @@ def facturation_slr(request):
                     write(employee_summary, '01_Employee_Summary', ['Libelle projet', 'Nom', 'Grade', 'Total Heures', 'Rate', 'Rate DES', 'Total', 'Total DES'])
                     write(global_summary, '02_Global_Summary', ['Libelle projet', 'Total Heures', 'Total', 'Total DES', 'Estimees'])
                     write(adjusted, '03_Adjusted', ['ID', 'Libelle projet', 'Nom', 'Grade', 'Total Heures', 'Rate', 'Total', 'Adjusted Hours', 'Heures Retirées', 'Adjusted Cost'])
-                    write(result, '04_Result')
+                    write(result, '04_Result', ['Libelle projet', 'Total Heures', 'Adjusted Hours', 'Heures Retirées', 'Adjusted Cost', 'Estimees', 'Ecart'])
 
                 output.seek(0)
                 now_str = datetime.now().strftime('%Y%m%d_%H%M%S')
