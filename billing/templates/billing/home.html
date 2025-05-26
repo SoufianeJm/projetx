@@ -12,36 +12,37 @@
     <button class="tab" data-tab="4">TABLEAU INTERACTIF</button>
 </div>
 <div id="tab-content-1" class="tab-content">
+    {% if data_available %}
     <div class="accueil-general-content">
         <div class="kpi-container">
             <div class="kpi-card">
                 <h4>Nb Employes</h4>
-                <p id="kpi-nb-employes">5</p>
+                <p id="kpi-nb-employes"></p>
             </div>
             <div class="kpi-card">
                 <h4>Total Budget Estime</h4>
-                <p id="kpi-budget-estime">25K</p>
+                <p id="kpi-budget-estime"></p>
             </div>
             <div class="kpi-card">
                 <h4>Total Adjusted Cost</h4>
-                <p id="kpi-adjusted-cost">22K</p>
+                <p id="kpi-adjusted-cost"></p>
             </div>
             <div class="kpi-card">
                 <h4>Total Ecart</h4>
-                <p id="kpi-ecart">-3K</p>
+                <p id="kpi-ecart"></p>
             </div>
             <div class="kpi-card">
                 <h4>% Ajustement</h4>
-                <p id="kpi-pct-ajustement">12%</p>
+                <p id="kpi-pct-ajustement"></p>
             </div>
         </div>
         <div class="dashboard-body">
             <div class="libelle-projet-list">
                 <h4>Libelle projet</h4>
-                <ul id="projetList">
-                    <li class="projet-list-item active" data-projet="CONFORAMA">CONFORAMA</li>
-                    <li class="projet-list-item" data-projet="COR ANALYSIS">COR ANALYSIS</li>
-                    <li class="projet-list-item" data-projet="CREDIT ANDORRA">CREDIT ANDORRA</li>
+                <ul id="projetList" style="list-style: none; padding: 0;">
+                    {% for projet in libelle_projets_list %}
+                        <li class="projet-list-item {% if forloop.first %}active{% endif %}" data-projet="{{ projet }}">{{ projet }}</li>
+                    {% endfor %}
                 </ul>
             </div>
             <div class="charts-area">
@@ -56,6 +57,13 @@
             </div>
         </div>
     </div>
+    {% else %}
+    <div style="text-align: center; padding: 50px;">
+        <h3>No calculation data found.</h3>
+        <p>Please run a calculation first from the 'Facturation SLR' page.</p>
+        <a href="{% url 'facturation_slr' %}" class="btn btn-primary" style="background-color: var(--primary-color); color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Go to Calculations</a>
+    </div>
+    {% endif %}
 </div>
 <div id="tab-content-2" class="tab-content" style="display:none;">This is ANALYSE PAR EMPLOYÉ</div>
 <div id="tab-content-3" class="tab-content" style="display:none;">This is AVANT / APRÉS AJUSTEMENT</div>
@@ -266,175 +274,162 @@
 {% endblock %}
 
 {% block extra_js %}
+{% if data_available %}
+    {{ projects_data_json_from_view|json_script:"allProjectsData" }}
+{% endif %}
 <script>
-// Wait for the DOM to be fully loaded
 document.addEventListener('DOMContentLoaded', function() {
-    // Get all tab buttons
     const tabs = document.querySelectorAll('.tab');
-    
-    // Add click event to each tab
     tabs.forEach(tab => {
         tab.addEventListener('click', function() {
-            // Get the tab number from data-tab attribute
             const tabNumber = this.getAttribute('data-tab');
-            
-            // Hide all tab contents
             document.querySelectorAll('.tab-content').forEach(content => {
                 content.style.display = 'none';
             });
-            
-            // Show the selected tab content
             const selectedContent = document.getElementById('tab-content-' + tabNumber);
             if (selectedContent) {
                 selectedContent.style.display = 'block';
             }
-            
-            // Update active state of tabs
             tabs.forEach(t => t.classList.remove('active'));
             this.classList.add('active');
         });
     });
-    
-    // Show first tab by default
     document.querySelector('.tab[data-tab="1"]').click();
-    
-    // Initialize charts and other functionality
-    const conforamaData = {
-        nbEmployes: 2,
-        budgetEstime: 20000,
-        adjustedCost: 18000,
-        ecart: -2000,
-        pctAjustement: 8.94
-    };
-
-    // Update KPIs for the default project
-    document.getElementById('kpi-nb-employes').textContent = conforamaData.nbEmployes;
-    document.getElementById('kpi-budget-estime').textContent = (conforamaData.budgetEstime / 1000).toFixed(0) + 'K';
-    document.getElementById('kpi-adjusted-cost').textContent = (conforamaData.adjustedCost / 1000).toFixed(0) + 'K';
-    document.getElementById('kpi-ecart').textContent = (conforamaData.ecart / 1000).toFixed(0) + 'K';
-    document.getElementById('kpi-pct-ajustement').textContent = conforamaData.pctAjustement.toFixed(2) + '%';
-
-    // Chart 1: Budget Estime vs Adjusted Cost (Horizontal Bar)
-    const ctxBudgetAdjusted = document.getElementById('budgetAdjustedChart').getContext('2d');
-    new Chart(ctxBudgetAdjusted, {
-        type: 'bar',
-        data: {
-            labels: ['CONFORAMA'],
-            datasets: [
-                {
-                    label: 'Total Budget Estime',
-                    data: [conforamaData.budgetEstime],
-                    backgroundColor: 'rgba(54, 162, 235, 0.6)',
-                    borderColor: 'rgba(54, 162, 235, 1)',
-                    borderWidth: 1
-                },
-                {
-                    label: 'Total Adjusted Cost',
-                    data: [conforamaData.adjustedCost],
-                    backgroundColor: 'rgba(75, 192, 192, 0.6)',
-                    borderColor: 'rgba(75, 192, 192, 1)',
-                    borderWidth: 1
-                }
-            ]
-        },
-        options: {
-            indexAxis: 'y',
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                x: {
-                    beginAtZero: true,
-                    ticks: { 
-                        callback: function(value) { return (value/1000) + 'K'},
-                        font: {
-                            family: 'Inter, sans-serif'
-                        }
-                    }
-                },
-                y: {
-                    font: {
-                        family: 'Inter, sans-serif'
-                    }
-                }
-            },
-            plugins: {
-                legend: { 
-                    position: 'top',
-                    labels: {
-                        font: {
-                            family: 'Inter, sans-serif'
-                        }
-                    }
-                }
-            }
-        }
-    });
-
-    // Chart 2: Budget Estime vs Ecart (Vertical Bar)
-    const ctxBudgetEcart = document.getElementById('budgetEcartChart').getContext('2d');
-    new Chart(ctxBudgetEcart, {
-        type: 'bar',
-        data: {
-            labels: ['CONFORAMA'],
-            datasets: [
-                {
-                    label: 'Total Budget Estime',
-                    data: [conforamaData.budgetEstime],
-                    backgroundColor: 'rgba(75, 192, 192, 0.6)',
-                    borderColor: 'rgba(75, 192, 192, 1)',
-                    borderWidth: 1
-                },
-                {
-                    label: 'Total Ecart',
-                    data: [conforamaData.ecart],
-                    backgroundColor: 'rgba(255, 99, 132, 0.6)',
-                    borderColor: 'rgba(255, 99, 132, 1)',
-                    borderWidth: 1
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                y: {
-                    beginAtZero: false,
-                    ticks: { 
-                        callback: function(value) { return (value/1000) + 'K'},
-                        font: {
-                            family: 'Inter, sans-serif'
-                        }
-                    }
-                },
-                x: {
-                    font: {
-                        family: 'Inter, sans-serif'
-                    }
-                }
-            },
-            plugins: {
-                legend: { 
-                    position: 'top',
-                    labels: {
-                        font: {
-                            family: 'Inter, sans-serif'
-                        }
-                    }
-                }
-            }
-        }
-    });
-
-    // Project list interactivity
+});
+</script>
+{% if data_available %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const allProjectsData = JSON.parse(document.getElementById('allProjectsData').textContent);
     const projetListItems = document.querySelectorAll('.projet-list-item');
+    const libelleProjets = Object.keys(allProjectsData);
+    let selectedProjet = libelleProjets.length > 0 ? libelleProjets[0] : null;
+    let budgetAdjustedChart = null;
+    let budgetEcartChart = null;
+
+    function formatK(val) {
+        return (val / 1000).toFixed(0) + 'K';
+    }
+    function formatPct(val) {
+        return val ? val.toFixed(2) + '%' : '0%';
+    }
+
+    function updateKPIs(data) {
+        document.getElementById('kpi-nb-employes').textContent = data.nbEmployes;
+        document.getElementById('kpi-budget-estime').textContent = formatK(data.budgetEstime);
+        document.getElementById('kpi-adjusted-cost').textContent = formatK(data.adjustedCost);
+        document.getElementById('kpi-ecart').textContent = formatK(data.ecart);
+        document.getElementById('kpi-pct-ajustement').textContent = formatPct(data.pctAjustement);
+    }
+
+    function initializeCharts(projetName) {
+        const data = allProjectsData[projetName];
+        updateKPIs(data);
+        const ctxBudgetAdjusted = document.getElementById('budgetAdjustedChart').getContext('2d');
+        if (budgetAdjustedChart) budgetAdjustedChart.destroy();
+        budgetAdjustedChart = new Chart(ctxBudgetAdjusted, {
+            type: 'bar',
+            data: {
+                labels: [projetName],
+                datasets: [
+                    {
+                        label: 'Total Budget Estime',
+                        data: [data.budgetEstime],
+                        backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Total Adjusted Cost',
+                        data: [data.adjustedCost],
+                        backgroundColor: 'rgba(75, 192, 192, 0.6)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1
+                    }
+                ]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) { return (value/1000) + 'K'},
+                            font: { family: 'Inter, sans-serif' }
+                        }
+                    },
+                    y: { font: { family: 'Inter, sans-serif' } }
+                },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: { font: { family: 'Inter, sans-serif' } }
+                    }
+                }
+            }
+        });
+        const ctxBudgetEcart = document.getElementById('budgetEcartChart').getContext('2d');
+        if (budgetEcartChart) budgetEcartChart.destroy();
+        budgetEcartChart = new Chart(ctxBudgetEcart, {
+            type: 'bar',
+            data: {
+                labels: [projetName],
+                datasets: [
+                    {
+                        label: 'Total Budget Estime',
+                        data: [data.budgetEstime],
+                        backgroundColor: 'rgba(75, 192, 192, 0.6)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Total Ecart',
+                        data: [data.ecart],
+                        backgroundColor: 'rgba(255, 99, 132, 0.6)',
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        borderWidth: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                        ticks: {
+                            callback: function(value) { return (value/1000) + 'K'},
+                            font: { family: 'Inter, sans-serif' }
+                        }
+                    },
+                    x: { font: { family: 'Inter, sans-serif' } }
+                },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: { font: { family: 'Inter, sans-serif' } }
+                    }
+                }
+            }
+        });
+    }
+
+    if (selectedProjet) {
+        initializeCharts(selectedProjet);
+    }
+
     projetListItems.forEach(item => {
         item.addEventListener('click', function() {
             projetListItems.forEach(li => li.classList.remove('active'));
             this.classList.add('active');
-            const selectedProjet = this.getAttribute('data-projet');
-            // Chart update logic will be implemented next
+            const selected = this.getAttribute('data-projet');
+            selectedProjet = selected;
+            initializeCharts(selectedProjet);
         });
     });
 });
 </script>
+{% endif %}
 {% endblock %} 

@@ -29,7 +29,66 @@ TEMP_FILES_BASE_DIR.mkdir(parents=True, exist_ok=True)
 
 @login_required
 def home(request):
-    return render(request, 'billing/home.html')
+    import json
+    from pathlib import Path
+    from django.conf import settings
+    import pandas as pd
+
+    last_slr_run_id = request.session.get('last_slr_run_id')
+    data_available = False
+    libelle_projets_list = []
+    overall_kpis = {}
+    projects_data_for_js = {}
+
+    if last_slr_run_id:
+        run_dir = Path(settings.MEDIA_ROOT) / 'slr_temp_runs' / last_slr_run_id
+        try:
+            result_df = pd.read_parquet(run_dir / 'result_initial.parquet')
+            employee_summary_df = pd.read_parquet(run_dir / 'employee_summary_initial.parquet')
+            global_summary_df = pd.read_parquet(run_dir / 'global_summary_initial.parquet')
+            data_available = True
+        except Exception:
+            data_available = False
+
+    if data_available:
+        # Prepare project list
+        libelle_projets_list = sorted(result_df['Libelle projet'].dropna().unique())
+        # Overall KPIs
+        nb_employes = employee_summary_df['Nom'].nunique()
+        total_budget_estime = result_df['Estimees'].sum()
+        total_adjusted_cost = result_df['Adjusted Cost'].sum()
+        total_ecart = result_df['Ecart'].sum()
+        pct_ajustement = ((total_budget_estime - total_adjusted_cost) / total_budget_estime * 100) if total_budget_estime else 0
+        overall_kpis = {
+            'nb_employes': int(nb_employes),
+            'total_budget_estime': float(total_budget_estime),
+            'total_adjusted_cost': float(total_adjusted_cost),
+            'total_ecart': float(total_ecart),
+            'pct_ajustement': float(pct_ajustement)
+        }
+        # Prepare per-project data
+        for libelle in libelle_projets_list:
+            proj_result = result_df[result_df['Libelle projet'] == libelle]
+            proj_employees = employee_summary_df[employee_summary_df['Libelle projet'] == libelle]
+            nb_employes_proj = proj_employees['Nom'].nunique()
+            budget_estime = proj_result['Estimees'].sum()
+            adjusted_cost = proj_result['Adjusted Cost'].sum()
+            ecart = proj_result['Ecart'].sum()
+            pct_ajustement = ((budget_estime - adjusted_cost) / budget_estime * 100) if budget_estime else 0
+            projects_data_for_js[libelle] = {
+                'nbEmployes': int(nb_employes_proj),
+                'budgetEstime': float(budget_estime),
+                'adjustedCost': float(adjusted_cost),
+                'ecart': float(ecart),
+                'pctAjustement': float(pct_ajustement)
+            }
+    context = {
+        'data_available': data_available,
+        'libelle_projets_list': libelle_projets_list,
+        'overall_kpis': overall_kpis,
+        'projects_data_json_from_view': json.dumps(projects_data_for_js),
+    }
+    return render(request, 'billing/home.html', context)
 
 @login_required
 def resource_list_view(request):
