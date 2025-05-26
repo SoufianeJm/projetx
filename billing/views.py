@@ -6,6 +6,7 @@ from django.urls import reverse_lazy
 from .models import Resource, Mission
 from .forms import ResourceForm, MissionForm, SLRFileUploadForm
 import pandas as pd
+import numpy as np
 import re
 from io import BytesIO
 from django.http import HttpResponse
@@ -269,9 +270,24 @@ def facturation_slr(request):
 
             adjusted = employee_summary.merge(global_summary[['Libelle projet', 'Estimees']], on='Libelle projet', how='left')
             adjusted['Total_Projet_Cout'] = adjusted.groupby('Libelle projet')['Total'].transform('sum')
-            adjusted['coeff_total'] = adjusted['Estimees'] / adjusted['Total_Projet_Cout']
+            
+            # Robust calculation of coeff_total using np.where to handle zero denominators
+            adjusted['coeff_total'] = np.where(
+                adjusted['Total_Projet_Cout'] > 0,
+                adjusted['Estimees'] / adjusted['Total_Projet_Cout'],
+                0
+            )
+            
             adjusted['total_rate_proj'] = adjusted.groupby('Libelle projet')['Rate'].transform('sum')
-            adjusted['priority_coeff'] = adjusted['Rate'] / adjusted['total_rate_proj']
+            
+            # Robust calculation of priority_coeff using np.where to handle zero denominators
+            adjusted['priority_coeff'] = np.where(
+                adjusted['total_rate_proj'] > 0,
+                adjusted['Rate'] / adjusted['total_rate_proj'],
+                0
+            )
+            
+            # Calculate final_coeff after ensuring both intermediate coefficients are robust
             adjusted['final_coeff'] = adjusted['coeff_total'] * adjusted['priority_coeff']
             
             # Initial Adjusted Hours calculation
@@ -290,7 +306,7 @@ def facturation_slr(request):
             adjusted['Heures Retirées'] = adjusted['Total Heures'] - adjusted['Adjusted Hours']
             adjusted['Adjusted Cost'] = adjusted['Adjusted Hours'] * adjusted['Rate']
             adjusted['ID'] = adjusted['Nom'].astype(str) + ' - ' + adjusted['Libelle projet'].astype(str)
-            processing_logs.append("DEBUG: Adjusted calculations completed with 30% rule applied")
+            processing_logs.append("DEBUG: Adjusted calculations completed with robust coefficient handling and 30% rule applied")
 
             cols = ['ID'] + [col for col in adjusted.columns if col != 'ID']
             adjusted = adjusted[cols]
