@@ -36,6 +36,11 @@ def home(request):
     from django.conf import settings
     import pandas as pd
 
+    def get_latest_parquet(run_dir, base):
+        updated = run_dir / f'{base}_updated.parquet'
+        initial = run_dir / f'{base}_initial.parquet'
+        return updated if updated.exists() else initial
+
     last_slr_run_id = request.session.get('last_slr_run_id')
     print(f"DEBUG: Retrieved last_slr_run_id from session: {last_slr_run_id}")
     data_available = False
@@ -46,20 +51,18 @@ def home(request):
     if last_slr_run_id:
         run_dir = Path(settings.MEDIA_ROOT) / 'slr_temp_runs' / last_slr_run_id
         print(f"DEBUG: Constructed run_dir: {run_dir}")
-        # Check for each required parquet file
-        parquet_files = ['result_initial.parquet', 'employee_summary_initial.parquet', 'global_summary_initial.parquet']
-        parquet_exists = {}
-        for fname in parquet_files:
-            fpath = run_dir / fname
-            exists = fpath.exists()
-            parquet_exists[fname] = exists
-            print(f"DEBUG: Checking for Parquet file: {fpath}, Exists: {exists}")
         try:
-            result_df = pd.read_parquet(run_dir / 'result_initial.parquet')
+            result_path = get_latest_parquet(run_dir, 'result')
+            employee_summary_path = get_latest_parquet(run_dir, 'employee_summary')
+            global_summary_path = get_latest_parquet(run_dir, 'global_summary')
+            print(f"DEBUG: Using result file: {result_path}")
+            print(f"DEBUG: Using employee_summary file: {employee_summary_path}")
+            print(f"DEBUG: Using global_summary file: {global_summary_path}")
+            result_df = pd.read_parquet(result_path)
             print(f"DEBUG: Loaded result_df, shape: {result_df.shape}")
-            employee_summary_df = pd.read_parquet(run_dir / 'employee_summary_initial.parquet')
+            employee_summary_df = pd.read_parquet(employee_summary_path)
             print(f"DEBUG: Loaded employee_summary_df, shape: {employee_summary_df.shape}")
-            global_summary_df = pd.read_parquet(run_dir / 'global_summary_initial.parquet')
+            global_summary_df = pd.read_parquet(global_summary_path)
             print(f"DEBUG: Loaded global_summary_df, shape: {global_summary_df.shape}")
             data_available = True
         except Exception as e:
