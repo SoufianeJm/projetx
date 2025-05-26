@@ -244,7 +244,11 @@ def facturation_slr(request):
         elif 'submit_step_2' in request.POST:
             processing_logs.append("DEBUG: Entered Step 2 POST processing block")
             current_step = 2
+            
             try:
+                # Log the start of Step 2 processing
+                processing_logs.append("DEBUG: Starting Step 2 processing")
+                
                 # Retrieve DataFrames from session
                 base_df_json = request.session.get('base_df_json')
                 mafe_df_json = request.session.get('mafe_df_json')
@@ -257,22 +261,22 @@ def facturation_slr(request):
                                     f"all_candidate_libelles: {'present' if all_candidate_libelles else 'missing'}")
 
                 if not all([base_df_json, mafe_df_json, heures_filename, all_candidate_libelles]):
+                    processing_logs.append("ERROR: Missing session data")
                     messages.error(request, "Session expired or data missing. Please start over.")
                     # Clear session data
                     for key in ['base_df_json', 'mafe_df_json', 'heures_filename', 'all_candidate_libelles_for_step2']:
                         request.session.pop(key, None)
                     return redirect('facturation_slr')
 
-                # Convert JSON back to DataFrames
-                base_df = pd.read_json(base_df_json)
-                mafe_df = pd.read_json(mafe_df_json)
-                processing_logs.append("DEBUG: DataFrames loaded from session successfully")
-
                 # Get selected missions
                 user_selected_libelles = request.POST.getlist('selected_libelle_projet')
                 processing_logs.append(f"DEBUG: User selected missions: {user_selected_libelles}")
-                target_mission_libelles_for_adjustment = user_selected_libelles if user_selected_libelles else all_candidate_libelles
-                processing_logs.append(f"INFO: Target missions for adjustment: {target_mission_libelles_for_adjustment}")
+                
+                # Convert JSON back to DataFrames
+                processing_logs.append("DEBUG: Converting JSON to DataFrames")
+                base_df = pd.read_json(base_df_json)
+                mafe_df = pd.read_json(mafe_df_json)
+                processing_logs.append("DEBUG: DataFrames loaded successfully")
 
                 # --- MATCH main.py LOGIC ---
                 processing_logs.append("DEBUG: Starting calculations...")
@@ -364,48 +368,58 @@ def facturation_slr(request):
                 # Generate Excel file
                 processing_logs.append("DEBUG: Starting Excel file generation")
                 output = BytesIO()
-                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                    workbook = writer.book
-                    header_format = workbook.add_format({'bold': True, 'bg_color': '#D9D2E9'})
-                    int_format = workbook.add_format({'num_format': '0'})
+                
+                try:
+                    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                        workbook = writer.book
+                        header_format = workbook.add_format({'bold': True, 'bg_color': '#D9D2E9'})
+                        int_format = workbook.add_format({'num_format': '0'})
 
-                    def write(df, sheet, selected_cols=None):
-                        if selected_cols:
-                            df = df[selected_cols]
-                        df.to_excel(writer, sheet_name=sheet, index=False, startrow=1, header=False)
-                        ws = writer.sheets[sheet]
-                        for i, col in enumerate(df.columns):
-                            ws.write(0, i, col, header_format)
-                            width = max(15, len(str(col)) + 2)
-                            ws.set_column(i, i, width, int_format if pd.api.types.is_integer_dtype(df[col]) else None)
-                        ws.add_table(0, 0, len(df), len(df.columns) - 1, {
-                            'name': f'Table_{sheet}',
-                            'style': 'TableStyleLight8',
-                            'columns': [{'header': c} for c in df.columns]
-                        })
+                        def write(df, sheet, selected_cols=None):
+                            if selected_cols:
+                                df = df[selected_cols]
+                            df.to_excel(writer, sheet_name=sheet, index=False, startrow=1, header=False)
+                            ws = writer.sheets[sheet]
+                            for i, col in enumerate(df.columns):
+                                ws.write(0, i, col, header_format)
+                                width = max(15, len(str(col)) + 2)
+                                ws.set_column(i, i, width, int_format if pd.api.types.is_integer_dtype(df[col]) else None)
+                            ws.add_table(0, 0, len(df), len(df.columns) - 1, {
+                                'name': f'Table_{sheet}',
+                                'style': 'TableStyleLight8',
+                                'columns': [{'header': c} for c in df.columns]
+                            })
 
-                    write(base_df[['Date', 'Code projet', 'Nom', 'Grade', 'Heures', 'Libelle projet']], '00_Base')
-                    write(employee_summary, '01_Employee_Summary', ['Libelle projet', 'Nom', 'Grade', 'Total Heures', 'Rate', 'Rate DES', 'Total', 'Total DES'])
-                    write(global_summary, '02_Global_Summary', ['Libelle projet', 'Total Heures', 'Total', 'Total DES', 'Estimees'])
-                    write(adjusted, '03_Adjusted', ['ID', 'Libelle projet', 'Nom', 'Grade', 'Total Heures', 'Rate', 'Total', 'Adjusted Hours', 'Heures Retirées', 'Adjusted Cost'])
-                    write(result, '04_Result')
+                        write(base_df[['Date', 'Code projet', 'Nom', 'Grade', 'Heures', 'Libelle projet']], '00_Base')
+                        write(employee_summary, '01_Employee_Summary', ['Libelle projet', 'Nom', 'Grade', 'Total Heures', 'Rate', 'Rate DES', 'Total', 'Total DES'])
+                        write(global_summary, '02_Global_Summary', ['Libelle projet', 'Total Heures', 'Total', 'Total DES', 'Estimees'])
+                        write(adjusted, '03_Adjusted', ['ID', 'Libelle projet', 'Nom', 'Grade', 'Total Heures', 'Rate', 'Total', 'Adjusted Hours', 'Heures Retirées', 'Adjusted Cost'])
+                        write(result, '04_Result')
 
-                output.seek(0)
-                now_str = datetime.now().strftime('%Y%m%d_%H%M%S')
-                filename = f"SLR_Facturation_{now_str}.xlsx"
-                processing_logs.append(f"INFO: Excel file generated with sheets: 00_Base, 01_Employee_Summary, 02_Global_Summary, 03_Adjusted, 04_Result")
+                    output.seek(0)
+                    now_str = datetime.now().strftime('%Y%m%d_%H%M%S')
+                    filename = f"SLR_Facturation_{now_str}.xlsx"
+                    processing_logs.append(f"INFO: Excel file generated successfully: {filename}")
 
-                # Clear session data after successful report generation
-                for key in ['base_df_json', 'mafe_df_json', 'heures_filename', 'all_candidate_libelles_for_step2']:
-                    request.session.pop(key, None)
+                    # Clear session data after successful report generation
+                    for key in ['base_df_json', 'mafe_df_json', 'heures_filename', 'all_candidate_libelles_for_step2']:
+                        request.session.pop(key, None)
 
-                response = HttpResponse(
-                    output.getvalue(),
-                    content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-                )
-                response['Content-Disposition'] = f'attachment; filename="{filename}"'
-                processing_logs.append("DEBUG: Excel file response prepared")
-                return response
+                    # Prepare the response
+                    response = HttpResponse(
+                        output.getvalue(),
+                        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                    )
+                    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+                    response['Content-Length'] = len(output.getvalue())
+                    processing_logs.append("DEBUG: Response prepared successfully")
+                    
+                    # Return the response immediately
+                    return response
+
+                except Exception as e:
+                    processing_logs.append(f"ERROR: Excel generation failed: {str(e)}")
+                    raise
 
             except Exception as e:
                 processing_logs.append(f"ERROR: Exception during calculation: {str(e)}<br><pre>{traceback.format_exc()}</pre>")

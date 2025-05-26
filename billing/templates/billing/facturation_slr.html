@@ -20,7 +20,7 @@
             </div>
         </div>
 
-        <form method="post" enctype="multipart/form-data" id="slrMultiStepForm">
+        <form method="post" enctype="multipart/form-data" id="slrMultiStepForm" target="_blank">
             {% csrf_token %}
             
             <!-- Step 1: File Upload -->
@@ -199,7 +199,7 @@ document.addEventListener('DOMContentLoaded', function() {
             generateReportBtn.disabled = true;
             generateReportBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Generating Report...';
             
-            // Let the form submit normally - no preventDefault()
+            // Let the form submit normally
             // The server will handle the file download response
         }
     });
