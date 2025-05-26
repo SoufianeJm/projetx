@@ -193,17 +193,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Add form submission handler
     form.addEventListener('submit', function(event) {
-        // Only prevent default if we're in step 2 and the generate report button was clicked
         if (event.submitter && event.submitter.name === 'submit_step_2') {
-            console.log('Generate Report button clicked');
-            // Let the form submit normally
+            console.log('Form submission started for Step 2');
+            // Show loading state
+            generateReportBtn.disabled = true;
+            generateReportBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Generating Report...';
+            
+            // Let the form submit normally - no preventDefault()
+            // The server will handle the file download response
         }
-    });
-
-    // Add click handler for generate report button
-    generateReportBtn.addEventListener('click', function(event) {
-        console.log('Generate Report button clicked');
-        // Let the form submit normally
     });
 });
 </script>
