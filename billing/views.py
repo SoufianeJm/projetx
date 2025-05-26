@@ -262,10 +262,7 @@ def facturation_slr(request):
                 processing_logs.append(f"INFO: Final target_mission_libelles_for_adjustment: {target_mission_libelles_for_adjustment}")
 
                 # --- MATCH main.py LOGIC ---
-                # 1. Prepare base_df (Heures IBM)
-                base_df = pd.read_excel(heures_ibm_file_obj, sheet_name='base', usecols="E,H,I,M,N")
-                base_df.columns = ['Code projet', 'Nom', 'Grade', 'Date', 'Heures']
-
+                # 1. Prepare base_df (Heures IBM) - already loaded from session
                 # 2. Prepare codes_df from Mission model
                 codes_qs = Mission.objects.all().values('otp_l2', 'libelle_de_projet')
                 codes_df = pd.DataFrame(list(codes_qs))
@@ -283,11 +280,10 @@ def facturation_slr(request):
                 consultants_df['Rate'] = pd.to_numeric(consultants_df['Rate'], errors='coerce').fillna(0)
                 consultants_df['Rate DES'] = pd.to_numeric(consultants_df['Rate DES'], errors='coerce').fillna(0)
 
-                # 4. Prepare MAFE file as in main.py
-                mafe_file_obj.seek(0)
-                mafe_raw = pd.read_excel(mafe_file_obj, sheet_name='(Tab A) FULLY COMMITTED', header=None)
-                mafe_raw.columns = mafe_raw.iloc[14].astype(str).str.strip().str.replace('\n', ' ').str.replace('\r', ' ')
-                mafe = mafe_raw.drop(index=list(range(0, 15))).reset_index(drop=True)
+                # 4. Prepare MAFE file as in main.py - already loaded from session
+                mafe = mafe_df.copy()
+                mafe.columns = mafe.iloc[14].astype(str).str.strip().str.replace('\n', ' ').str.replace('\r', ' ')
+                mafe = mafe.drop(index=list(range(0, 15))).reset_index(drop=True)
 
                 # 5. Find forecast column in MAFE
                 mois_mapping = {
@@ -296,7 +292,7 @@ def facturation_slr(request):
                     'Jan': 'Jan', 'Feb': 'Feb', 'Mar': 'Mar', 'Apr': 'Apr', 'May': 'May', 'Jun': 'Jun',
                     'Jul': 'Jul', 'Aug': 'Aug', 'Sep': 'Sep', 'Oct': 'Oct', 'Nov': 'Nov', 'Dec': 'Dec'
                 }
-                match = re.search(r'(Janvier|Février|Mars|Avril|Mai|Juin|Juillet|Août|Septembre|Octobre|Novembre|Décembre|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[^\d]*(\d{2,4})', heures_ibm_file_obj.name)
+                match = re.search(r'(Janvier|Février|Mars|Avril|Mai|Juin|Juillet|Août|Septembre|Octobre|Novembre|Décembre|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[^\d]*(\d{2,4})', request.FILES.get('heures_ibm_file').name)
                 mois = mois_mapping.get(match.group(1), match.group(1)) if match else ''
                 annee = match.group(2) if match else ''
                 forecast_col_cleaned = next((col for col in mafe.columns if mois in col and 'Forecasts' in col and annee[-2:] in col), None)
