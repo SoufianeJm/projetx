@@ -170,17 +170,25 @@
     }
 
     #bulkDeleteBtn {
-        background-color: var(--accent-color);
+        background-color: #ccc;
         color: white;
         padding: 10px 20px;
         border: none;
         border-radius: 5px;
-        cursor: pointer;
+        cursor: not-allowed;
+        transition: background 0.18s;
+    }
+
+    #bulkDeleteBtn.active {
+        background-color: red !important;
+        color: white !important;
+        cursor: pointer !important;
     }
 
     #bulkDeleteBtn:disabled {
-        background-color: #ccc;
-        cursor: not-allowed;
+        background-color: #ccc !important;
+        color: white !important;
+        cursor: not-allowed !important;
     }
 </style>
 
@@ -199,19 +207,19 @@ document.addEventListener('DOMContentLoaded', function() {
         updateBulkDeleteButton();
     });
 
-    // Handle individual checkboxes
+    // Handle enabling/disabling bulk delete button
     Array.from(missionCheckboxes).forEach(checkbox => {
-        checkbox.addEventListener('change', function() {
-            updateBulkDeleteButton();
-            // Update select all checkbox state
-            selectAllCheckbox.checked = Array.from(missionCheckboxes).every(cb => cb.checked);
-        });
+        checkbox.addEventListener('change', updateBulkDeleteButton);
     });
 
-    // Update bulk delete button state
     function updateBulkDeleteButton() {
-        const checkedBoxes = Array.from(missionCheckboxes).filter(cb => cb.checked);
-        bulkDeleteBtn.disabled = checkedBoxes.length === 0;
+        const anyChecked = Array.from(missionCheckboxes).some(checkbox => checkbox.checked);
+        bulkDeleteBtn.disabled = !anyChecked;
+        if (anyChecked) {
+            bulkDeleteBtn.classList.add('active');
+        } else {
+            bulkDeleteBtn.classList.remove('active');
+        }
     }
 
     // Handle form submission

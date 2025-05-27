@@ -4,9 +4,11 @@
 {% block page_title %}{{ action }} Mission{% endblock %}
 
 {% block content %}
-<div class="table-wrapper">
-    <h2>{{ action }} Mission</h2>
-    <form method="post">
+<div class="mission-form-card">
+    <div class="mission-form-header">
+        <h2>{{ action }} Mission</h2>
+    </div>
+    <form method="post" class="mission-form">
         {% csrf_token %}
         <div class="form-group">
             <label for="{{ form.otp_l2.id_for_label }}">OTP L2:</label>
@@ -41,62 +43,94 @@
         </div>
 
         <div class="form-actions">
-            <button type="submit" class="btn-add-new">{{ action }}</button>
-            <a href="{% url 'mission_list' %}" class="btn-cancel">Cancel</a>
+            <button type="submit" class="btn btn-primary">{{ action }}</button>
+            <a href="{% url 'mission_list' %}" class="btn btn-secondary">Cancel</a>
         </div>
     </form>
 </div>
 
 <style>
-    .form-group {
-        margin-bottom: 20px;
-    }
-
-    .form-group label {
-        display: block;
-        margin-bottom: 5px;
-        font-weight: bold;
-        color: var(--secondary-color);
-    }
-
-    .form-group input,
-    .form-group select {
-        width: 100%;
-        padding: 8px;
-        border: 1px solid var(--border-color);
-        border-radius: 4px;
-        font-size: 16px;
-    }
-
-    .form-group input:focus,
-    .form-group select:focus {
-        outline: none;
-        border-color: var(--primary-color);
-    }
-
-    .error-message {
-        color: var(--accent-color);
-        font-size: 14px;
-        margin-top: 5px;
-    }
-
-    .form-actions {
-        margin-top: 20px;
-        display: flex;
-        gap: 10px;
-    }
-
-    .btn-cancel {
-        display: inline-block;
-        background-color: var(--secondary-color);
-        color: #fff;
-        padding: 10px 20px;
-        text-decoration: none;
-        border-radius: 5px;
-    }
-
-    .btn-cancel:hover {
-        background-color: #1a252f;
-    }
+.mission-form-card {
+    background: #fff;
+    border-radius: 18px;
+    box-shadow: 0 4px 24px rgba(128, 195, 66, 0.07);
+    padding: 32px;
+    margin: 18px 0;
+    max-width: 98vw;
+}
+.mission-form-header {
+    margin-bottom: 24px;
+}
+.mission-form-header h2 {
+    font-size: 1.5rem;
+    color: #2C3E50;
+    margin: 0;
+}
+.mission-form {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+.form-group {
+    margin-bottom: 0;
+}
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #2C3E50;
+}
+.form-group input,
+.form-group select {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1.5px solid #e9ecef;
+    border-radius: 8px;
+    font-size: 1.08rem;
+    background: #f8fafc;
+    transition: border-color 0.2s;
+}
+.form-group input:focus,
+.form-group select:focus {
+    outline: none;
+    border-color: #80C342;
+    background: #fff;
+}
+.error-message {
+    color: #e74c3c;
+    font-size: 0.9rem;
+    margin-top: 5px;
+}
+.form-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 10px;
+}
+.btn {
+    padding: 12px 22px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 1.08rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+.btn-primary {
+    background-color: #80C342;
+    color: white;
+    border: none;
+}
+.btn-primary:hover {
+    background-color: #6ba336;
+}
+.btn-secondary {
+    background-color: #e9ecef;
+    color: #2C3E50;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+}
+.btn-secondary:hover {
+    background-color: #dee2e6;
+}
 </style>
 {% endblock %} 

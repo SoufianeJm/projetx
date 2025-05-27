@@ -4,109 +4,241 @@
 {% block title %}Resources{% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <h1 class="page-title">Resources</h1>
-    <form method="get" class="search-bar">
-        <input type="text" 
-               name="search" 
-               class="search-input" 
-               placeholder="Search by name, matricule, or grade..." 
-               value="{{ search_query|default:'' }}">
-        <button type="submit" class="btn btn-primary" title="Search">
-            <i class="fas fa-search"></i>
-        </button>
-    </form>
-    <a href="{% url 'resource_create' %}" class="btn btn-primary">
-        <i class="fas fa-plus"></i>
-        Add New Resource
-    </a>
-</div>
-
-<div class="card">
-    {% if resources %}
-    <table class="table-modern">
-        <thead>
-            <tr>
-                <th style="width: 60px">Picture</th>
-                <th>Full Name</th>
-                <th>Matricule</th>
-                <th>Grade</th>
-                <th>Grade Description</th>
-                <th style="width: 60px">Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for resource in resources %}
-            <tr>
-                <td>
-                    {% if resource.picture %}
-                        <div class="avatar">
-                            <img src="{{ resource.picture.url }}" alt="{{ resource.full_name }}">
-                        </div>
-                    {% else %}
-                        <div class="avatar">
-                            {% if resource.full_name %}
-                                {{ resource.full_name|slice:":1"|upper }}
-                            {% else %}
-                                <i class="fas fa-user"></i>
-                            {% endif %}
-                        </div>
-                    {% endif %}
-                </td>
-                <td>{{ resource.full_name }}</td>
-                <td>{{ resource.matricule }}</td>
-                <td>{{ resource.grade }}</td>
-                <td>{{ resource.grade_des }}</td>
-                <td class="actions-cell">
-                    <div class="action-menu">
-                        <button type="button" class="action-trigger" onclick="toggleActionMenu('{{ forloop.counter }}')">
-                            <i class="fas fa-ellipsis-v"></i>
-                        </button>
-                        <div class="action-menu-items" id="action-menu-{{ forloop.counter }}">
-                            <a href="{% url 'resource_update' resource.pk %}" class="action-menu-item">
-                                <i class="fas fa-edit"></i> Edit
-                            </a>
-                            <a href="{% url 'resource_delete' resource.pk %}" class="action-menu-item delete">
-                                <i class="fas fa-trash"></i> Delete
-                            </a>
-                        </div>
-                    </div>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    {% else %}
-    <div class="empty-state">
-        <p>No resources currently listed.</p>
-        <a href="{% url 'resource_create' %}" class="btn btn-primary">
-            <i class="fas fa-plus"></i>
-            Add New Resource
-        </a>
+<div class="table-wrapper">
+    <div class="table-header">
+        <h2>Resources</h2>
+        <div class="table-actions">
+            <a href="{% url 'resource_create' %}" class="btn-add-new">Add New Resource</a>
+            <button type="submit" form="resourceForm" class="btn-delete" id="bulkDeleteBtn" disabled>Delete Selected</button>
+        </div>
     </div>
-    {% endif %}
+    <div class="search-box">
+        <form method="get" class="search-form">
+            <input type="text" name="search" value="{{ search_query }}" placeholder="Search resources...">
+            <button type="submit">Search</button>
+        </form>
+    </div>
+    <form method="post" action="" id="resourceForm">
+        {% csrf_token %}
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 40px;">
+                        <input type="checkbox" id="selectAll" class="select-all-checkbox">
+                    </th>
+                    <th style="width: 60px">Picture</th>
+                    <th>Full Name</th>
+                    <th>Matricule</th>
+                    <th>Grade</th>
+                    <th>Grade DES</th>
+                    <th>Rate IBM</th>
+                    <th>Rate DES</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for resource in resources %}
+                <tr>
+                    <td>
+                        <input type="checkbox" name="selected_resources" value="{{ resource.pk }}" class="resource-checkbox">
+                    </td>
+                    <td>
+                        {% if resource.picture %}
+                            <div class="avatar avatar-modern">
+                                <img src="{{ resource.picture.url }}" alt="{{ resource.full_name }}">
+                            </div>
+                        {% else %}
+                            <div class="avatar avatar-modern avatar-fallback">
+                                {% if resource.full_name %}
+                                    {{ resource.full_name|slice:":1"|upper }}
+                                {% else %}
+                                    <i class="fas fa-user"></i>
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                    </td>
+                    <td>{{ resource.full_name }}</td>
+                    <td>{{ resource.matricule }}</td>
+                    <td>{{ resource.grade }}</td>
+                    <td>{{ resource.grade_des }}</td>
+                    <td>{{ resource.rate_ibm }}</td>
+                    <td>{{ resource.rate_des }}</td>
+                    <td class="action-buttons">
+                        <a href="{% url 'resource_update' resource.pk %}" class="btn-edit">Edit</a>
+                        <a href="{% url 'resource_delete' resource.pk %}" class="btn-delete">Delete</a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="9">No resources found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </form>
 </div>
 
-<script>
-function toggleActionMenu(id) {
-    // Close all other menus
-    document.querySelectorAll('.action-menu-items').forEach(menu => {
-        if (menu.id !== `action-menu-${id}`) {
-            menu.classList.remove('show');
-        }
-    });
-    
-    // Toggle the clicked menu
-    const menu = document.getElementById(`action-menu-${id}`);
-    menu.classList.toggle('show');
+<style>
+.table-wrapper {
+    margin: 20px;
 }
+.table-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+.table-actions {
+    display: flex;
+    gap: 10px;
+}
+.search-box {
+    margin-bottom: 20px;
+}
+.search-form {
+    display: flex;
+    gap: 10px;
+}
+.search-form input {
+    padding: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    flex-grow: 1;
+}
+.search-form button {
+    padding: 8px 16px;
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+th, td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+}
+th {
+    background-color: var(--primary-color);
+    color: white;
+    font-weight: bold;
+}
+tr:hover {
+    background-color: var(--hover-color);
+}
+.action-buttons {
+    display: flex;
+    gap: 10px;
+}
+.btn-add-new {
+    display: inline-block;
+    background-color: var(--primary-color);
+    color: white;
+    padding: 10px 20px;
+    text-decoration: none;
+    border-radius: 5px;
+}
+.btn-edit, .btn-delete {
+    padding: 5px 10px;
+    border-radius: 3px;
+    text-decoration: none;
+    color: white;
+    border: none;
+    cursor: pointer;
+}
+.btn-edit {
+    background-color: var(--primary-color);
+}
+.btn-delete {
+    background-color: var(--accent-color);
+}
+.btn-edit:hover {
+    background-color: #6d9a1d;
+}
+.btn-delete:hover {
+    background-color: #c0392b;
+}
+.select-all-checkbox, .resource-checkbox {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+#bulkDeleteBtn {
+    background-color: #ccc;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: not-allowed;
+    transition: background 0.18s;
+}
+#bulkDeleteBtn.active {
+    background-color: red !important;
+    color: white !important;
+    cursor: pointer !important;
+}
+#bulkDeleteBtn:disabled {
+    background-color: #ccc !important;
+    color: white !important;
+    cursor: not-allowed !important;
+}
+.avatar-modern {
+    width: 38px;
+    height: 38px;
+    font-size: 1.1rem;
+    margin: 0 auto;
+    border-radius: 50%;
+    object-fit: cover;
+    background: #f8fafc;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.avatar-modern img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+}
+.avatar-fallback {
+    background: #e9ecef;
+    color: #b7e4c7;
+    font-size: 1.2rem;
+}
+</style>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const selectAllCheckbox = document.getElementById('selectAll');
+    const resourceCheckboxes = document.getElementsByClassName('resource-checkbox');
+    const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
+    const resourceForm = document.getElementById('resourceForm');
 
-// Close menus when clicking outside
-document.addEventListener('click', function(event) {
-    if (!event.target.closest('.action-menu')) {
-        document.querySelectorAll('.action-menu-items').forEach(menu => {
-            menu.classList.remove('show');
+    // Handle select all checkbox
+    selectAllCheckbox.addEventListener('change', function() {
+        Array.from(resourceCheckboxes).forEach(checkbox => {
+            checkbox.checked = this.checked;
         });
+        updateBulkDeleteButton();
+    });
+
+    // Handle enabling/disabling bulk delete button
+    Array.from(resourceCheckboxes).forEach(checkbox => {
+        checkbox.addEventListener('change', updateBulkDeleteButton);
+    });
+
+    function updateBulkDeleteButton() {
+        const anyChecked = Array.from(resourceCheckboxes).some(checkbox => checkbox.checked);
+        bulkDeleteBtn.disabled = !anyChecked;
+        if (anyChecked) {
+            bulkDeleteBtn.classList.add('active');
+        } else {
+            bulkDeleteBtn.classList.remove('active');
+        }
     }
 });
 </script>

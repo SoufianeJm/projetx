@@ -136,6 +136,14 @@ def resource_list_view(request):
     search_query = request.GET.get('search', '')
     resources = Resource.objects.all()
     
+    # Bulk delete logic
+    if request.method == 'POST' and 'selected_resources' in request.POST:
+        selected_ids = request.POST.getlist('selected_resources')
+        if selected_ids:
+            Resource.objects.filter(pk__in=selected_ids).delete()
+            messages.success(request, f"Successfully deleted {len(selected_ids)} resource(s).")
+            return redirect('resource_list')
+
     if search_query:
         resources = resources.filter(
             models.Q(full_name__icontains=search_query) |
@@ -143,9 +151,21 @@ def resource_list_view(request):
             models.Q(grade__icontains=search_query) |
             models.Q(grade_des__icontains=search_query)
         )
-    
+    # Annotate display values for grade and grade_des
+    resource_list = []
+    for r in resources:
+        resource_list.append({
+            'pk': r.pk,
+            'picture': r.picture,
+            'full_name': r.full_name,
+            'matricule': r.matricule,
+            'grade': r.get_grade_display(),
+            'grade_des': r.get_grade_des_display(),
+            'rate_ibm': r.rate_ibm,
+            'rate_des': r.rate_des,
+        })
     context = {
-        'resources': resources,
+        'resources': resource_list,
         'page_title': 'Resources',
         'search_query': search_query
     }
