@@ -20,7 +20,7 @@
                 </a>
             </div>
 
-            <a href="{% url 'facturation_slr' %}" class="calculate-button">
+            <a href="{% url 'facturation_slr' %}" class="calculate-button{% if request.path == '/facturation/slr/' or request.path == '/' %} active{% endif %}">
                 <i class="fas fa-calculator"></i>
                 Calculer Facture
             </a>
@@ -28,7 +28,7 @@
             <nav class="sidebar-nav">
                 <ul class="nav-list">
                     <li class="nav-item">
-                        <a href="{% url 'home' %}" class="nav-link{% if request.path == '/' %} active{% endif %}">
+                        <a href="{% url 'dashboard' %}" class="nav-link{% if request.path == '/dashboard/' %} active{% endif %}">
                             <i class="fas fa-home"></i>
                             <span>Dashboard</span>
                         </a>
@@ -139,5 +139,17 @@
     </script>
     {% block extra_body %}{% endblock %}
     {% block extra_js %}{% endblock %}
+
+    <style>
+    .sidebar .nav-link {
+        opacity: 0.6;
+        transition: opacity 0.18s;
+    }
+    .sidebar .nav-link.active {
+        opacity: 1;
+        background: none !important;
+    }
+    /* Keep .calculate-button as a button, not a faded nav item */
+    </style>
 </body>
 </html> 
